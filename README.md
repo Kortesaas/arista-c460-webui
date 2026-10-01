@@ -46,8 +46,8 @@ deploy/deploy.sh 192.168.1.40 --gnmi-credentials secrets/ap1.secret.json --site-
 On the first install the script asks for the web UI administrator login: the username defaults to `config`, and you choose the password (at least 8 characters; no default password is shipped). It then:
 
 - installs `/opt/c460-webui/c460-webui`, `config.json` (mode 0600) and `auth.json` (bcrypt hash);
-- registers the procd service `/etc/init.d/c460-webui`, started at boot via `/etc/rc.d/S0900c460-webui`;
-- starts the service and checks `http://<ap>/`.
+- installs the procd script as `/opt/c460-webui/c460-webui.init` and links it from `/opt/init.d/c460-webui` and `/etc/rc.d/S0900c460-webui` (symlinks only, see below);
+- starts the service, checks `http://<ap>/` and runs the boot-trust pre-check.
 
 The same command updates an existing install; the configuration and password are kept. Other options:
 
@@ -59,6 +59,20 @@ deploy/deploy.sh <ap> --uninstall
 ```
 
 Firmware upgrades or factory resets probably remove the installation; deploy again afterwards.
+
+### Firmware boot-time trust check (read this before changing the AP)
+
+At every boot the C-460 firmware (`/etc/rc.d/fs_init`) checks its writable layer. If it finds anything it does not trust, it **deletes the entire writable layer** (`/overlay/upper`: your OpenConfig mode, API users, SSH keys, this UI…) and boots the other firmware partition. It fails the check when:
+
+- any **regular file** is in a protected directory: `/usr`, `/bin`, `/etc`, `/lib`, `/lib64`, `/sbin`, `/opt/init.d`, `/opt/lib`, `/opt/keys`, `/opt/scripts`, `/opt/sensor/scripts`, `/opt/dhclient`, `/opt/udhcpc` (symlinks are fine; exempt: `/etc/resolv.conf`, `/etc/profile`, `/usr/local/etc/`, `/lib/firmware/`). This includes Python bytecode caches: run any Python on the AP as `python3 -B`;
+- `/opt/passwd`, `/opt/group`, `/opt/shells`, `/opt/sensor/sensor-shell`, `/opt/sensor/sensor.md5` or `/etc/shadow` differ from the image (they are measured into TPM PCR 7);
+- a vendor file listed in `/opt/sensor/sensor.md5` was modified.
+
+This project only writes under `/opt/c460-webui/` and creates symlinks. Before rebooting after **any** manual change on the AP, run:
+
+```bash
+deploy/deploy.sh <ap> --check      # runs deploy/overlay-check.sh on the AP, read-only
+```
 
 ### Configuration file
 
