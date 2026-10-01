@@ -2,6 +2,8 @@
 
 A local, self-hosted web interface for the **Arista C-460** Wi-Fi 7 access point. It runs on the access point itself and lets you manage it from a browser at `http://<ap-ip>/`, like the built-in web UI of a typical standalone access point. No controller and no cloud service are needed.
 
+The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance that it is a community project.
+
 > **Unofficial.** This project is not affiliated with, endorsed by or supported by Arista Networks. It changes files on the AP and uses interfaces the vendor does not document for this purpose. Use it at your own risk, and keep console access available while you experiment.
 
 ## Features
@@ -11,7 +13,7 @@ A local, self-hosted web interface for the **Arista C-460** Wi-Fi 7 access point
 - **Radios (read/write):** channel (regulatory list, DFS marked), channel width, transmit power, automatic channel/power, enable/disable. It shows the effective EIRP, channel utilisation and noise floor.
 - **Clients:** signal, SNR, rates, traffic, IP/hostname where the AP reports them.
 - **RF scan:** neighbouring access points with channel occupancy.
-- **System:** device and firmware information, Ethernet ports, web UI password.
+- **System:** device and firmware information, Ethernet ports, administrator username and password.
 - Light, dark and system themes; works on phones.
 
 ## How it works
@@ -41,7 +43,7 @@ cp deploy/gnmi-credentials.example.json secrets/ap1.secret.json   # gitignored; 
 deploy/deploy.sh 192.168.1.40 --gnmi-credentials secrets/ap1.secret.json --site-name "Stage left"
 ```
 
-On the first install the script asks for the web UI administrator password. It then:
+On the first install the script asks for the web UI administrator login: the username defaults to `config`, and you choose the password (at least 8 characters; no default password is shipped). It then:
 
 - installs `/opt/c460-webui/c460-webui`, `config.json` (mode 0600) and `auth.json` (bcrypt hash);
 - registers the procd service `/etc/init.d/c460-webui`, started at boot via `/etc/rc.d/S0900c460-webui`;
@@ -50,7 +52,8 @@ On the first install the script asks for the web UI administrator password. It t
 The same command updates an existing install; the configuration and password are kept. Other options:
 
 ```bash
-deploy/deploy.sh <ap> --set-password            # change the UI password
+deploy/deploy.sh <ap> --set-password            # reset the UI login (e.g. forgotten password)
+deploy/deploy.sh <ap> --username admin          # use a different login name
 deploy/deploy.sh <ap> --vlan-names vlans.json   # {"10": "Office", "20": "Guests"} shown next to VLAN ids
 deploy/deploy.sh <ap> --uninstall
 ```
@@ -65,7 +68,7 @@ Firmware upgrades or factory resets probably remove the installation; deploy aga
 |---|---|---|
 | `listen` | `:80` | HTTP listen address |
 | `pollSeconds` | `5` | How often the AP state is read |
-| `authFile` | `/opt/c460-webui/auth.json` | Password hash file |
+| `authFile` | `/opt/c460-webui/auth.json` | Username and bcrypt password hash |
 | `hostname` | eth0 MAC with dashes | OpenConfig access-point key |
 | `siteName` | — | Label shown in the UI |
 | `vlanNames` | — | Optional VLAN id → name map |

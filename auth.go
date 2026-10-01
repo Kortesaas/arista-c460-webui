@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -31,34 +32,65 @@ type Auth struct {
 }
 
 type authFile struct {
+	Username     string `json:"username"`
 	PasswordHash string `json:"passwordHash"`
 }
+
+// DefaultUsername matches the AP's own CLI account name.
+const DefaultUsername = "config"
 
 func NewAuth(file string) *Auth {
 	return &Auth{file: file, sessions: map[string]time.Time{}, failures: map[string][]time.Time{}}
 }
 
-func (a *Auth) hash() ([]byte, error) {
+func (a *Auth) load() (authFile, error) {
+	var f authFile
 	raw, err := os.ReadFile(a.file)
 	if err != nil {
-		return nil, err
+		return f, err
 	}
-	var f authFile
 	if err := json.Unmarshal(raw, &f); err != nil {
-		return nil, err
+		return f, err
 	}
 	if f.PasswordHash == "" {
-		return nil, errors.New("no password set")
+		return f, errors.New("no password set")
 	}
-	return []byte(f.PasswordHash), nil
+	if f.Username == "" {
+		f.Username = DefaultUsername
+	}
+	return f, nil
 }
 
 func (a *Auth) Configured() bool {
-	_, err := a.hash()
+	_, err := a.load()
 	return err == nil
 }
 
-func (a *Auth) SetPassword(password string) error {
+// Username returns the configured login name (DefaultUsername when unset).
+func (a *Auth) Username() string {
+	if f, err := a.load(); err == nil {
+		return f.Username
+	}
+	return DefaultUsername
+}
+
+func validUsername(name string) error {
+	if len(name) < 1 || len(name) > 32 {
+		return errors.New("username must be 1–32 characters")
+	}
+	for _, r := range name {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+			return errors.New("username may only contain letters, digits, '.', '_' and '-'")
+		}
+	}
+	return nil
+}
+
+// SetCredentials stores a username and bcrypt password hash.
+func (a *Auth) SetCredentials(username, password string) error {
+	if err := validUsername(username); err != nil {
+		return err
+	}
 	if len(password) < 8 {
 		return errors.New("password must be at least 8 characters")
 	}
@@ -66,7 +98,7 @@ func (a *Auth) SetPassword(password string) error {
 	if err != nil {
 		return err
 	}
-	raw, _ := json.Marshal(authFile{PasswordHash: string(hash)})
+	raw, _ := json.Marshal(authFile{Username: username, PasswordHash: string(hash)})
 	if err := os.MkdirAll(filepath.Dir(a.file), 0o700); err != nil {
 		return err
 	}
@@ -85,8 +117,8 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// Check verifies a password, rate limiting failures per client address.
-func (a *Auth) Check(r *http.Request, password string) error {
+// Check verifies username and password, rate limiting failures per client address.
+func (a *Auth) Check(r *http.Request, username, password string) error {
 	ip := clientIP(r)
 	a.mu.Lock()
 	now := time.Now()
@@ -102,11 +134,12 @@ func (a *Auth) Check(r *http.Request, password string) error {
 	if locked {
 		return errTooManyAttempts
 	}
-	hash, err := a.hash()
+	f, err := a.load()
 	if err != nil {
 		return errNotConfigured
 	}
-	if bcrypt.CompareHashAndPassword(hash, []byte(password)) != nil {
+	userOK := subtle.ConstantTimeCompare([]byte(username), []byte(f.Username)) == 1
+	if bcrypt.CompareHashAndPassword([]byte(f.PasswordHash), []byte(password)) != nil || !userOK {
 		a.mu.Lock()
 		a.failures[ip] = append(a.failures[ip], now)
 		a.mu.Unlock()
@@ -122,7 +155,7 @@ func (a *Auth) Check(r *http.Request, password string) error {
 var (
 	errTooManyAttempts = errors.New("too many failed attempts, try again in a few minutes")
 	errNotConfigured   = errors.New("no UI password configured on this access point")
-	errBadPassword     = errors.New("wrong password")
+	errBadPassword     = errors.New("wrong username or password")
 )
 
 func (a *Auth) NewSession(w http.ResponseWriter) error {

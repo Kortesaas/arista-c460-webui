@@ -79,50 +79,57 @@ export function SystemPage() {
 }
 
 function PasswordPanel() {
-  const toast = useApp((store) => store.toast)
+  const { toast, username: currentUser, signOut } = useApp()
   const [current, setCurrent] = useState('')
+  const [username, setUsername] = useState(currentUser)
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
-  const problem = next && next.length < 8 ? 'At least 8 characters.' : confirm && confirm !== next ? 'The passwords do not match.' : null
+  const problem = !/^[A-Za-z0-9._-]{1,32}$/.test(username)
+    ? "Username: 1–32 letters, digits, '.', '_' or '-'."
+    : next && next.length < 8
+      ? 'The new password needs at least 8 characters.'
+      : confirm && confirm !== next
+        ? 'The passwords do not match.'
+        : null
 
   const save = async () => {
     setBusy(true)
     try {
-      await api.changePassword(current, next)
-      toast('Password changed. Other sessions were signed out.')
-      setCurrent('')
-      setNext('')
-      setConfirm('')
+      await api.changeCredentials(current, username, next)
+      toast('Administrator account updated. Please sign in again.')
+      await signOut()
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error), 'danger')
-    } finally {
       setBusy(false)
     }
   }
 
   return (
-    <Panel title="Web interface password">
+    <Panel title="Administrator account">
       <form
-        className="grid gap-3 sm:grid-cols-3"
+        className="grid gap-3 sm:grid-cols-2"
         onSubmit={(event) => {
           event.preventDefault()
           void save()
         }}
       >
-        <Field label="Current">
+        <Field label="Username">
+          <Input autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} />
+        </Field>
+        <Field label="Current password">
           <Input type="password" autoComplete="current-password" value={current} onChange={(event) => setCurrent(event.target.value)} />
         </Field>
-        <Field label="New">
+        <Field label="New password">
           <Input type="password" autoComplete="new-password" value={next} onChange={(event) => setNext(event.target.value)} />
         </Field>
-        <Field label="Repeat new">
+        <Field label="Repeat new password">
           <Input type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
         </Field>
-        <div className="flex items-center justify-between gap-3 sm:col-span-3">
+        <div className="flex items-center justify-between gap-3 sm:col-span-2">
           <p className="text-[12px] text-warn">{problem}</p>
           <Button type="submit" variant="primary" disabled={busy || !current || !next || next !== confirm || Boolean(problem)}>
-            {busy ? <Spinner size={12} /> : <KeyRound size={13} />} Change password
+            {busy ? <Spinner size={12} /> : <KeyRound size={13} />} Save account
           </Button>
         </div>
       </form>

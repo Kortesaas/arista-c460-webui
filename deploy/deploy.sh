@@ -8,22 +8,23 @@
 #                            OpenConfig API user. Required on the first install.
 #   --site-name NAME         Label shown in the UI (default: none, the hostname is shown).
 #   --vlan-names FILE        JSON object mapping VLAN ids to names, e.g. {"10": "Office"}.
-#   --set-password           Prompt for a new web UI password even if one exists.
+#   --set-password           Set the web UI login again even if one exists.
+#   --username NAME          Login name for the web UI (default: config).
 #   --ssh-key FILE           SSH identity for root@<ap> (default: ssh config / agent).
 #   --known-hosts FILE       Pinned known_hosts file for the AP.
 #   --no-build               Install the existing build/c460-webui.
 #   --uninstall              Stop and remove the web UI from the AP.
 #
-# Set C460_UI_PASSWORD to provide the UI password without a prompt.
+# Set C460_UI_PASSWORD (and optionally C460_UI_USERNAME) to skip the prompts.
 set -euo pipefail
 
-usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-1}"; }
+usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-1}"; }
 
 [ $# -ge 1 ] || usage
 case "$1" in -h | --help) usage 0 ;; esac
 HOST=$1
 shift
-GNMI_CREDS="" SITE_NAME="" VLAN_NAMES="" SET_PASSWORD=0 BUILD=1 UNINSTALL=0
+GNMI_CREDS="" SITE_NAME="" VLAN_NAMES="" SET_PASSWORD=0 BUILD=1 UNINSTALL=0 UI_USER=${C460_UI_USERNAME:-}
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -31,6 +32,7 @@ while [ $# -gt 0 ]; do
 	--site-name) SITE_NAME=$2; shift ;;
 	--vlan-names) VLAN_NAMES=$2; shift ;;
 	--set-password) SET_PASSWORD=1 ;;
+	--username) UI_USER=$2; SET_PASSWORD=1; shift ;;
 	--ssh-key) SSH_OPTS+=(-i "$2" -o IdentitiesOnly=yes); shift ;;
 	--known-hosts) SSH_OPTS+=(-o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$2"); shift ;;
 	--no-build) BUILD=0 ;;
@@ -101,14 +103,18 @@ fi
 
 has_auth=$(ap "test -f $DIR/auth.json && echo yes || echo no" | tail -1)
 if [ "$has_auth" != yes ] || [ "$SET_PASSWORD" = 1 ]; then
-	step "Set the web UI administrator password"
+	step "Set the web UI administrator login"
+	if [ -z "$UI_USER" ]; then
+		if [ -n "${C460_UI_PASSWORD:-}" ]; then UI_USER=config; else read -r -p "Username [config]: " UI_USER; UI_USER=${UI_USER:-config}; fi
+	fi
+	[[ "$UI_USER" =~ ^[A-Za-z0-9._-]{1,32}$ ]] || { echo "Username: 1-32 letters, digits, '.', '_' or '-'." >&2; exit 1; }
 	pw1=${C460_UI_PASSWORD:-} pw2=${C460_UI_PASSWORD:-}
 	while [ -z "$pw1" ] || [ "$pw1" != "$pw2" ] || [ ${#pw1} -lt 8 ]; do
 		read -r -s -p "New password (min. 8 characters): " pw1; echo
 		read -r -s -p "Repeat: " pw2; echo
 		[ "$pw1" = "$pw2" ] && [ ${#pw1} -ge 8 ] || echo "Passwords differ or are shorter than 8 characters, try again."
 	done
-	printf '%s\n' "$pw1" | ap "$DIR/c460-webui -config $DIR/config.json -set-password"
+	printf '%s\n' "$pw1" | ap "$DIR/c460-webui -config $DIR/config.json -set-password -username '$UI_USER'"
 	unset pw1 pw2
 fi
 

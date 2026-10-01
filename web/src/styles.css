@@ -13,10 +13,10 @@
     --text: #0d1421;
     --text-muted: #5a6680;
     --text-faint: #8a94a8;
-    --accent: #2f6feb;
-    --accent-hover: #2860d4;
-    --accent-soft: #e7effd;
-    --accent-text: #1d4ed8;
+    --accent: #1d4fc4;
+    --accent-hover: #173fa0;
+    --accent-soft: #e6edfb;
+    --accent-text: #123a96;
     --ok: #0f7b52;
     --ok-soft: #e2f5ec;
     --warn: #9a5b06;
@@ -27,6 +27,15 @@
     --canvas-grid: #1b2436;
     --shadow: 0 1px 2px rgb(13 20 33 / 6%), 0 1px 3px rgb(13 20 33 / 4%);
     --shadow-lg: 0 12px 32px -8px rgb(13 20 33 / 18%);
+    --brand: #031e56;
+    --band-24: #9a5b06;
+    --band-24-soft: #fdf0dc;
+    --band-5: #1d4fc4;
+    --band-5-soft: #e6edfb;
+    --band-6: #0f7b52;
+    --band-6-soft: #e2f5ec;
+    --brand-bar: #031e56;
+    --brand-bar-line: #0d2f78;
     color-scheme: light;
   }
 
@@ -54,6 +63,15 @@
     --canvas-grid: #151d2c;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%);
     --shadow-lg: 0 16px 40px -12px rgb(0 0 0 / 60%);
+    --brand: #c9d6ff;
+    --band-24: #f0b357;
+    --band-24-soft: #2a1f0f;
+    --band-5: #74a4ff;
+    --band-5-soft: #16233d;
+    --band-6: #3ecf8e;
+    --band-6-soft: #10281f;
+    --brand-bar: #071637;
+    --brand-bar-line: #13285a;
     color-scheme: dark;
   }
 

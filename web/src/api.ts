@@ -24,10 +24,10 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 export const api = {
-  session: () => call<{ authenticated: boolean; configured: boolean }>('GET', '/api/session'),
-  login: (password: string) => call<{ authenticated: boolean }>('POST', '/api/login', { password }),
+  session: () => call<{ authenticated: boolean; configured: boolean; username: string }>('GET', '/api/session'),
+  login: (username: string, password: string) => call<{ authenticated: boolean }>('POST', '/api/login', { username, password }),
   logout: () => call('POST', '/api/logout', {}),
-  changePassword: (current: string, next: string) => call('POST', '/api/password', { current, next }),
+  changeCredentials: (current: string, username: string, next: string) => call('POST', '/api/password', { current, username, next }),
   state: () => call<ApState>('GET', '/api/state'),
   createSsid: (input: SsidInput) => call('POST', '/api/ssids', input),
   updateSsid: (name: string, input: SsidInput) => call('PUT', `/api/ssids/${encodeURIComponent(name)}`, input),

@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Antenna, Gauge, LogOut, Menu, Monitor, Moon, PanelLeft, Radar, RefreshCw, Server, Sun, Users, Wifi } from 'lucide-react'
 import { cn } from '@/ui/cn'
-import { LogoMark } from '@/ui/Logo'
-import { Badge, IconButton } from '@/ui/kit'
+import { Brand } from '@/ui/Brand'
+import { Badge } from '@/ui/kit'
 import { useApp, type Connection } from '@/stores/app'
 import { useThemeStore, type Theme } from '@/stores/theme'
 import { Age } from '@/components/status'
@@ -108,17 +108,49 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, [collapsed])
 
-  useEffect(() => {
-    const device = state?.device
-    document.title = device ? `${device.siteName || device.hostname} · ${device.model}` : 'C-460 Access Point'
-  }, [state?.device])
-
   const title = titles.find(([prefix]) => location.pathname.startsWith(prefix))?.[1] ?? 'Access point'
   const device = state?.device
+
+  useEffect(() => {
+    document.title = device ? `${title} · ${device.siteName || device.hostname} · ARRR-ISTA` : 'ARRR-ISTA C460'
+  }, [title, device])
   const clients = state?.clients.length ?? 0
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-brand-bar-line bg-brand-bar px-3 text-white sm:px-4">
+        <button type="button" aria-label="Open navigation" onClick={() => setMobileOpen(true)} className="grid h-8 w-8 place-items-center rounded text-white/80 hover:bg-white/10 hover:text-white lg:hidden">
+          <Menu size={17} />
+        </button>
+        <NavLink to="/overview" className="flex items-center" aria-label="Overview">
+          <Brand height={38} className="text-white" />
+        </NavLink>
+        <span className="hidden h-6 w-px bg-white/20 sm:block" />
+        <div className="hidden min-w-0 flex-col leading-tight sm:flex">
+          <span className="truncate text-[13px] font-semibold">{device?.siteName || device?.hostname || 'Access point'}</span>
+          <span className="mono truncate text-[11px] text-white/60">{device ? `${device.model} · ${device.mgmtIp} · ${device.firmware}` : ''}</span>
+        </div>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          {connection !== 'live' && <Badge tone={connection === 'offline' ? 'danger' : 'warn'}>{connectionLabel[connection].label}</Badge>}
+          <button
+            type="button"
+            onClick={() => {
+              setRefreshing(true)
+              void refresh().finally(() => setRefreshing(false))
+            }}
+            className="inline-flex h-8 items-center gap-1.5 rounded border border-white/20 px-2.5 text-[12px] font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <RefreshCw size={13} className={cn(refreshing && 'spin')} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+          <button type="button" onClick={() => void signOut()} aria-label="Sign out" title="Sign out" className="grid h-8 w-8 place-items-center rounded text-white/80 hover:bg-white/10 hover:text-white">
+            <LogOut size={15} />
+          </button>
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
       {mobileOpen && <button aria-label="Close navigation" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-40 bg-black/50 lg:hidden" />}
       <aside
         className={cn(
@@ -127,15 +159,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-sm bg-ink text-[var(--surface)]">
-            <LogoMark size={15} />
-          </span>
-          {!collapsed && (
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[11px] font-bold uppercase tracking-[0.12em] text-ink">{device?.model ?? 'C-460'}</span>
-              <span className="block truncate text-[10px] leading-3 text-faint">{device?.siteName || 'Access point'}</span>
-            </span>
+        <div className={cn('flex h-10 shrink-0 items-center gap-2 border-b border-line px-3 text-brand', collapsed && 'justify-center px-0')}>
+          {collapsed ? (
+            <Brand variant="hat" height={18} />
+          ) : (
+            <span className="truncate text-2xs font-semibold uppercase tracking-wider text-faint">{device?.model ?? 'C-460'} access point</span>
           )}
         </div>
 
@@ -182,41 +210,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
-          <IconButton label="Open navigation" onClick={() => setMobileOpen(true)} className="lg:hidden">
-            <Menu size={16} />
-          </IconButton>
-          <div className="flex min-w-0 items-baseline gap-2">
-            <h1 className="truncate text-[13px] font-semibold text-ink">{title}</h1>
-            <span className="mono hidden truncate text-[12px] text-faint sm:block">
-              {device ? `${device.hostname} · ${device.mgmtIp}` : ''}
-            </span>
-          </div>
-
-          <div className="ml-auto flex items-center gap-1.5">
-            {connection !== 'live' && <Badge tone={connection === 'offline' ? 'danger' : 'warn'}>{connectionLabel[connection].label}</Badge>}
-            <button
-              type="button"
-              onClick={() => {
-                setRefreshing(true)
-                void refresh().finally(() => setRefreshing(false))
-              }}
-              className="inline-flex h-7 items-center gap-1.5 rounded border border-line bg-surface-2 px-2 text-[12px] font-medium text-muted transition-colors hover:border-line-strong hover:text-ink"
-            >
-              <RefreshCw size={13} className={cn(refreshing && 'spin')} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-            <IconButton label="Sign out" onClick={() => void signOut()}>
-              <LogOut size={15} />
-            </IconButton>
-          </div>
-        </header>
-
         {state?.error && (
           <div className="shrink-0 border-b border-line bg-warn-soft px-3 py-1.5 text-[12px] leading-4 text-warn">{state.error} — showing the last known values.</div>
         )}
-
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+      </div>
       </div>
     </div>
   )

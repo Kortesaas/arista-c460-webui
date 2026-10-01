@@ -14,6 +14,7 @@ interface Toast {
 interface AppStore {
   auth: Auth
   configured: boolean
+  username: string
   state: ApState | null
   connection: Connection
   error: string | null
@@ -21,7 +22,7 @@ interface AppStore {
   toasts: Toast[]
   init: () => () => void
   refresh: () => Promise<void>
-  signIn: (password: string) => Promise<void>
+  signIn: (username: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   toast: (text: string, tone?: Toast['tone']) => void
   /** Runs a configuration change, reports the outcome and refreshes state. */
@@ -33,6 +34,7 @@ let toastId = 0
 export const useApp = create<AppStore>((set, get) => ({
   auth: 'unknown',
   configured: true,
+  username: '',
   state: null,
   connection: 'connecting',
   error: null,
@@ -52,7 +54,7 @@ export const useApp = create<AppStore>((set, get) => ({
     void api
       .session()
       .then((session) => {
-        set({ auth: session.authenticated ? 'signed-in' : 'signed-out', configured: session.configured })
+        set({ auth: session.authenticated ? 'signed-in' : 'signed-out', configured: session.configured, username: session.username })
         void loop()
       })
       .catch((error: unknown) => set({ auth: 'signed-out', connection: 'offline', error: String(error) }))
@@ -76,15 +78,15 @@ export const useApp = create<AppStore>((set, get) => ({
     }
   },
 
-  signIn: async (password) => {
-    await api.login(password)
-    set({ auth: 'signed-in', connection: 'connecting' })
+  signIn: async (username, password) => {
+    await api.login(username, password)
+    set({ auth: 'signed-in', connection: 'connecting', username })
     await get().refresh()
   },
 
   signOut: async () => {
     await api.logout().catch(() => undefined)
-    set({ auth: 'signed-out', state: null })
+    set({ auth: 'signed-out', state: null, username: '' })
   },
 
   toast: (text, tone = 'ok') => {

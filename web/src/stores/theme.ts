@@ -5,9 +5,9 @@ const KEY = 'c460-theme'
 
 const stored = (): Theme => {
   try {
-    return (localStorage.getItem(KEY) as Theme | null) ?? 'dark'
+    return (localStorage.getItem(KEY) as Theme | null) ?? 'light'
   } catch {
-    return 'dark'
+    return 'light'
   }
 }
 

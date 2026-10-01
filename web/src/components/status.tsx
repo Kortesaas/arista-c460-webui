@@ -36,14 +36,14 @@ export function Stat({ label, value, detail, tone = 'neutral', icon }: { label: 
   )
 }
 
-const bandColor: Record<Band, string> = { '2.4': '#f0b357', '5': '#5b93ff', '6': '#3ecf8e' }
+const bandVar: Record<Band, string> = { '2.4': 'band-24', '5': 'band-5', '6': 'band-6' }
 
 export function BandChip({ band, muted }: { band: Band | ''; muted?: boolean }) {
   if (!band) return <span className="text-faint">—</span>
   return (
     <span
       className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 text-2xs font-semibold leading-4', muted ? 'border-line text-faint' : 'border-transparent')}
-      style={muted ? undefined : { background: `${bandColor[band]}22`, color: bandColor[band] }}
+      style={muted ? undefined : { background: `var(--${bandVar[band]}-soft)`, color: `var(--${bandVar[band]})` }}
     >
       {band} GHz
     </span>

@@ -85,17 +85,26 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 // ---------------------------------------------------------------- session
 
 func (a *API) session(w http.ResponseWriter, r *http.Request) {
-	reply(w, http.StatusOK, map[string]any{"authenticated": a.auth.Valid(r), "configured": a.auth.Configured()})
+	reply(w, http.StatusOK, map[string]any{"authenticated": a.auth.Valid(r), "configured": a.auth.Configured(), "username": a.sessionUser(r)})
+}
+
+// sessionUser exposes the login name only to signed-in callers.
+func (a *API) sessionUser(r *http.Request) string {
+	if a.auth.Valid(r) {
+		return a.auth.Username()
+	}
+	return ""
 }
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	var body struct {
+		Username string `json:"username"`
 		Password string `json:"password"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := a.auth.Check(r, body.Password); err != nil {
+	if err := a.auth.Check(r, body.Username, body.Password); err != nil {
 		code := http.StatusUnauthorized
 		if errors.Is(err, errTooManyAttempts) {
 			code = http.StatusTooManyRequests
@@ -117,22 +126,27 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Current string `json:"current"`
-		Next    string `json:"next"`
+		Current  string `json:"current"`
+		Username string `json:"username"` // empty keeps the current name
+		Next     string `json:"next"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := a.auth.Check(r, body.Current); err != nil {
+	user := a.auth.Username()
+	if err := a.auth.Check(r, user, body.Current); err != nil {
 		fail(w, http.StatusForbidden, "current password: "+err.Error())
 		return
 	}
-	if err := a.auth.SetPassword(body.Next); err != nil {
+	if body.Username != "" {
+		user = body.Username
+	}
+	if err := a.auth.SetCredentials(user, body.Next); err != nil {
 		fail(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	a.auth.EndSession(w, r, true)
-	log.Printf("UI password changed from %s", clientIP(r))
+	log.Printf("UI credentials changed from %s", clientIP(r))
 	reply(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

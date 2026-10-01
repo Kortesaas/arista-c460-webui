@@ -84,6 +84,7 @@ func loadConfig(path string) (*Config, error) {
 func main() {
 	configPath := flag.String("config", "/opt/c460-webui/config.json", "configuration file")
 	setPassword := flag.Bool("set-password", false, "read a new UI password from stdin and store its hash")
+	username := flag.String("username", "", "login name stored with -set-password (default: keep current, or \""+DefaultUsername+"\")")
 	showVersion := flag.Bool("version", false, "print version")
 	flag.Parse()
 
@@ -102,10 +103,14 @@ func main() {
 		if err != nil && line == "" {
 			log.Fatalf("read password: %v", err)
 		}
-		if err := auth.SetPassword(strings.TrimRight(line, "\r\n")); err != nil {
+		user := *username
+		if user == "" {
+			user = auth.Username()
+		}
+		if err := auth.SetCredentials(user, strings.TrimRight(line, "\r\n")); err != nil {
 			log.Fatalf("set password: %v", err)
 		}
-		fmt.Println("password updated")
+		fmt.Printf("credentials updated for user %q\n", user)
 		return
 	}
 
