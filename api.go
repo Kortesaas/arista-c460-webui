@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
@@ -23,6 +25,9 @@ type API struct {
 	gnmi    *GNMI
 	poller  *Poller
 	writeMu sync.Mutex // one configuration change at a time
+
+	cli        *CLIInfo
+	cliTrigger chan struct{}
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -35,6 +40,13 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.Handle("PUT /api/ssids/{name}", a.protect(a.updateSSID))
 	mux.Handle("DELETE /api/ssids/{name}", a.protect(a.deleteSSID))
 	mux.Handle("PUT /api/radios/{id}", a.protect(a.updateRadio))
+	mux.Handle("PUT /api/management", a.protect(a.updateManagement))
+	mux.Handle("GET /api/trust", a.protect(a.trust))
+	mux.Handle("POST /api/reboot", a.protect(a.reboot))
+	mux.Handle("POST /api/locate", a.protect(a.locate))
+	mux.Handle("DELETE /api/locate", a.protect(a.stopLocate))
+	mux.Handle("PUT /api/settings", a.protect(a.updateSettings))
+	mux.Handle("PUT /api/ssh", a.protect(a.updateSSH))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { fail(w, http.StatusNotFound, "unknown endpoint") })
 }
 
@@ -150,8 +162,23 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	reply(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+type stateResponse struct {
+	APState
+	Management      Management   `json:"management"`
+	Hardware        HardwareInfo `json:"hardware"`
+	ManagementError string       `json:"managementError,omitempty"`
+}
+
 func (a *API) state(w http.ResponseWriter, r *http.Request) {
-	reply(w, http.StatusOK, a.poller.Snapshot())
+	mgmt, hw, err := a.cli.Snapshot()
+	reply(w, http.StatusOK, stateResponse{APState: a.poller.Snapshot(), Management: mgmt, Hardware: hw, ManagementError: err})
+}
+
+func (a *API) refreshCLI() {
+	select {
+	case a.cliTrigger <- struct{}{}:
+	default:
+	}
 }
 
 // ------------------------------------------------------------------ SSIDs
@@ -407,4 +434,141 @@ func (a *API) updateRadio(w http.ResponseWriter, r *http.Request) {
 	cfg["dtp"] = req.DTP
 	body := map[string]any{"radios": map[string]any{"radio": []any{map[string]any{"id": id, "operating-frequency": freq, "config": cfg}}}}
 	a.apply(w, r, fmt.Sprintf("update radio %d", id), body, nil)
+}
+
+// ------------------------------------------------------- management (CLI)
+
+func (a *API) updateManagement(w http.ResponseWriter, r *http.Request) {
+	var req ManagementRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
+	current, _, _ := a.cli.Snapshot()
+	comm := current.CommVLAN
+	if comm == "" {
+		comm = "untagged"
+	}
+	command, err := req.cliCommand(comm)
+	if err != nil {
+		fail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, err := runCLI(r.Context(), command); err != nil {
+		log.Printf("management change failed: %v", err)
+		fail(w, http.StatusBadGateway, "The access point rejected the setting: "+err.Error())
+		return
+	}
+	log.Printf("management settings saved by %s: %s", clientIP(r), command)
+	a.cli.Refresh(r.Context())
+	reply(w, http.StatusOK, map[string]any{"ok": true, "rebootRequired": true})
+}
+
+func (a *API) trust(w http.ResponseWriter, r *http.Request) {
+	reply(w, http.StatusOK, runTrustCheck(r.Context()))
+}
+
+func (a *API) reboot(w http.ResponseWriter, r *http.Request) {
+	var body struct{}
+	if !decode(w, r, &body) {
+		return
+	}
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
+	check := runTrustCheck(r.Context())
+	if !check.OK {
+		reply(w, http.StatusConflict, map[string]any{
+			"error":    "Reboot refused: the firmware would wipe its writable layer on the next boot.",
+			"problems": check.Problems,
+		})
+		return
+	}
+	log.Printf("reboot requested by %s", clientIP(r))
+	reply(w, http.StatusOK, map[string]bool{"ok": true})
+	go func() {
+		time.Sleep(time.Second)
+		if _, err := runCLI(context.Background(), "force reboot"); err != nil {
+			log.Printf("reboot failed: %v", err)
+		}
+	}()
+}
+
+func (a *API) locate(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Minutes int `json:"minutes"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if body.Minutes < 1 || body.Minutes > 30 {
+		fail(w, http.StatusBadRequest, "minutes must be 1–30")
+		return
+	}
+	if _, err := runCLI(r.Context(), fmt.Sprintf("led blink period %d", body.Minutes)); err != nil {
+		fail(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	reply(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *API) stopLocate(w http.ResponseWriter, r *http.Request) {
+	if _, err := runCLI(r.Context(), "no led blink"); err != nil {
+		fail(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	reply(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// -------------------------------------------------------------- settings
+
+func (a *API) updateSettings(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		SiteName  string            `json:"siteName"`
+		VLANNames map[string]string `json:"vlanNames"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	site := strings.TrimSpace(body.SiteName)
+	if utf8.RuneCountInString(site) > 48 || strings.ContainsFunc(site, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		fail(w, http.StatusBadRequest, "device name: up to 48 printable characters")
+		return
+	}
+	names := map[string]string{}
+	for id, name := range body.VLANNames {
+		n, err := strconv.Atoi(id)
+		name = strings.TrimSpace(name)
+		if err != nil || n < 1 || n > 4094 || strconv.Itoa(n) != id {
+			fail(w, http.StatusBadRequest, fmt.Sprintf("invalid VLAN id %q", id))
+			return
+		}
+		if name == "" {
+			continue
+		}
+		if utf8.RuneCountInString(name) > 24 {
+			fail(w, http.StatusBadRequest, "VLAN names: up to 24 characters")
+			return
+		}
+		names[id] = name
+	}
+	if err := a.cfg.SetLabels(site, names); err != nil {
+		fail(w, http.StatusInternalServerError, "could not save settings: "+err.Error())
+		return
+	}
+	a.poller.Refresh()
+	reply(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *API) updateSSH(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
+	a.apply(w, r, fmt.Sprintf("set SSH server enabled=%t", body.Enabled),
+		map[string]any{"system": map[string]any{"ssh-server": map[string]any{"config": map[string]any{"enable": body.Enabled}}}}, nil)
 }

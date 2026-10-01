@@ -50,6 +50,10 @@ DIR=/opt/c460-webui
 # The firmware wipes the writable layer at boot if it finds regular files in
 # protected directories (/etc, /usr, /opt/init.d, ...), so everything we
 # install lives in $DIR and the init/boot entries are only symlinks.
+# procd names the service after the basename one symlink hop away, so the real
+# script must also be called c460-webui (boot: S0900… -> /opt/init.d/c460-webui,
+# manual: /opt/init.d/c460-webui -> $DIR/init/c460-webui); otherwise two
+# services fight over port 80.
 INIT=/opt/init.d/c460-webui
 BOOTLINK=/etc/rc.d/S0900c460-webui
 ap() { ssh "${SSH_OPTS[@]}" "root@$HOST" "$@" 2>&1 | sed '/^-\{10,\}$/d; /^ \[AP\]/d; /^ Network Interface/d'; return "${PIPESTATUS[0]}"; }
@@ -97,7 +101,7 @@ fi
 
 step "Uploading binary"
 ap "mkdir -p $DIR && chmod 700 $DIR && cat > $DIR/c460-webui.new && chmod 700 $DIR/c460-webui.new && mv $DIR/c460-webui.new $DIR/c460-webui" <"$ROOT/build/c460-webui"
-ap "cat > $DIR/c460-webui.init && chmod 755 $DIR/c460-webui.init && rm -f $INIT && ln -s $DIR/c460-webui.init $INIT && ln -sfn $INIT $BOOTLINK" <"$ROOT/deploy/c460-webui.init"
+ap "mkdir -p $DIR/init && cat > $DIR/init/c460-webui && chmod 755 $DIR/init/c460-webui && rm -f $INIT $DIR/c460-webui.init && ln -s $DIR/init/c460-webui $INIT && ln -sfn $INIT $BOOTLINK" <"$ROOT/deploy/c460-webui.init"
 
 if [ -n "$GNMI_CREDS" ] || [ -n "$SITE_NAME" ] || [ -n "$VLAN_NAMES" ]; then
 	step "Writing configuration"

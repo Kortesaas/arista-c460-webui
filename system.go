@@ -36,7 +36,8 @@ type Device struct {
 var bannerField = regexp.MustCompile(`(Model|Build|Version)\s*:\s*\[([^\]]*)\]`)
 
 func readDevice(cfg *Config) Device {
-	d := Device{SiteName: cfg.SiteName, Model: "C-460", UIVersion: version, Load: []string{}}
+	site, _ := cfg.Labels()
+	d := Device{SiteName: site, Model: "C-460", UIVersion: version, Load: []string{}}
 
 	// The vendor SSH banner carries model and build strings.
 	if raw, err := os.ReadFile("/opt/banner"); err == nil {

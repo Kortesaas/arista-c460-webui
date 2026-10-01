@@ -138,7 +138,7 @@ type Poller struct {
 
 func NewPoller(g *GNMI, cfg *Config, interval time.Duration) *Poller {
 	return &Poller{gnmi: g, cfg: cfg, interval: interval, trigger: make(chan struct{}, 1),
-		state: APState{PollSeconds: cfg.PollSeconds, VLANNames: cfg.VLANNames}}
+		state: APState{PollSeconds: cfg.PollSeconds, VLANNames: map[string]string{}}}
 }
 
 func (p *Poller) Run(ctx context.Context) {
@@ -197,7 +197,7 @@ func (p *Poller) poll(ctx context.Context) {
 	}
 	st.GeneratedAt = time.Now()
 	st.PollSeconds = p.cfg.PollSeconds
-	st.VLANNames = p.cfg.VLANNames
+	_, st.VLANNames = p.cfg.Labels()
 	p.state = st
 }
 
@@ -286,7 +286,9 @@ func build(tree map[string]any) APState {
 		st.SSIDs = append(st.SSIDs, ssid)
 	}
 	sort.Slice(st.SSIDs, func(i, j int) bool { return st.SSIDs[i].Name < st.SSIDs[j].Name })
-	sort.Slice(st.Clients, func(i, j int) bool { return st.Clients[i].SSID+st.Clients[i].MAC < st.Clients[j].SSID+st.Clients[j].MAC })
+	sort.Slice(st.Clients, func(i, j int) bool {
+		return st.Clients[i].SSID+st.Clients[i].MAC < st.Clients[j].SSID+st.Clients[j].MAC
+	})
 
 	for _, r := range items(tree, "radios", "radio") {
 		cfg, state := dig(r, "config"), dig(r, "state")

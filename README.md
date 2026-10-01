@@ -46,7 +46,7 @@ deploy/deploy.sh 192.168.1.40 --gnmi-credentials secrets/ap1.secret.json --site-
 On the first install the script asks for the web UI administrator login: the username defaults to `config`, and you choose the password (at least 6 characters; no default password is shipped). It then:
 
 - installs `/opt/c460-webui/c460-webui`, `config.json` (mode 0600) and `auth.json` (bcrypt hash);
-- installs the procd script as `/opt/c460-webui/c460-webui.init` and links it from `/opt/init.d/c460-webui` and `/etc/rc.d/S0900c460-webui` (symlinks only, see below);
+- installs the procd script as `/opt/c460-webui/init/c460-webui` and links it from `/opt/init.d/c460-webui` and `/etc/rc.d/S0900c460-webui` (symlinks only, see below);
 - starts the service, checks `http://<ap>/` and runs the boot-trust pre-check.
 
 The same command updates an existing install; the configuration and password are kept. Other options:

@@ -108,9 +108,14 @@ func (g *GNMI) GetAP(parent context.Context) (json.RawMessage, error) {
 func (g *GNMI) SetAP(parent context.Context, body map[string]any, deletes []*gpb.Path) error {
 	body["hostname"] = g.host
 	body["config"] = map[string]any{"hostname": g.host}
-	body["system"] = map[string]any{"aaa": map[string]any{"authentication": map[string]any{"users": map[string]any{"user": []any{
+	system, _ := body["system"].(map[string]any)
+	if system == nil {
+		system = map[string]any{}
+	}
+	system["aaa"] = map[string]any{"authentication": map[string]any{"users": map[string]any{"user": []any{
 		map[string]any{"username": g.cfg.Username, "config": map[string]any{"username": g.cfg.Username, "password": g.cfg.Password}},
-	}}}}}
+	}}}}
+	body["system"] = system
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)

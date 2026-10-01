@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -28,6 +29,8 @@ var version = "dev"
 
 // Config is read from a JSON file on the AP. Secrets live only there.
 type Config struct {
+	mu          sync.RWMutex
+	path        string
 	Listen      string            `json:"listen"`
 	Hostname    string            `json:"hostname"` // gNMI access-point key; derived from the eth0 MAC when empty
 	PollSeconds int               `json:"pollSeconds"`
@@ -68,6 +71,7 @@ func loadConfig(path string) (*Config, error) {
 	if cfg.GNMI.Username == "" || cfg.GNMI.Password == "" {
 		return nil, errors.New("gnmi.username and gnmi.password are required")
 	}
+	cfg.path = path
 	if cfg.PollSeconds < 2 {
 		cfg.PollSeconds = 2
 	}
@@ -79,6 +83,33 @@ func loadConfig(path string) (*Config, error) {
 		cfg.Hostname = strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(string(mac)), ":", "-"))
 	}
 	return cfg, nil
+}
+
+// Labels returns the user-editable display settings.
+func (c *Config) Labels() (string, map[string]string) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	names := make(map[string]string, len(c.VLANNames))
+	for k, v := range c.VLANNames {
+		names[k] = v
+	}
+	return c.SiteName, names
+}
+
+// SetLabels updates the display settings and rewrites the config file (mode 0600).
+func (c *Config) SetLabels(site string, names map[string]string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SiteName, c.VLANNames = site, names
+	raw, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := c.path + ".tmp"
+	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, c.path)
 }
 
 func main() {
@@ -125,12 +156,15 @@ func main() {
 
 	poller := NewPoller(gnmi, cfg, time.Duration(cfg.PollSeconds)*time.Second)
 	go poller.Run(ctx)
+	cliInfo := &CLIInfo{}
+	cliTrigger := make(chan struct{}, 1)
+	go cliInfo.Run(ctx, 5*time.Minute, cliTrigger)
 
 	dist, err := fs.Sub(webFS, "web/dist")
 	if err != nil {
 		log.Fatal(err)
 	}
-	api := &API{cfg: cfg, auth: auth, gnmi: gnmi, poller: poller}
+	api := &API{cfg: cfg, auth: auth, gnmi: gnmi, poller: poller, cli: cliInfo, cliTrigger: cliTrigger}
 	mux := http.NewServeMux()
 	api.Register(mux)
 	mux.Handle("/", spaHandler(dist))
