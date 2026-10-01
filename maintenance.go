@@ -59,6 +59,7 @@ func runTrustCheck(ctx context.Context) TrustCheck {
 	defer cancel()
 	cmd := exec.CommandContext(md5ctx, "md5sum", "-c", "/opt/sensor/sensor.md5")
 	cmd.Dir = "/"
+	cmd.Env = cleanEnv()
 	out, _ := cmd.CombinedOutput()
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)

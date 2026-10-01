@@ -23,7 +23,7 @@ func runCLI(parent context.Context, command string) (string, error) {
 	ctx, cancel := context.WithTimeout(parent, 45*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", `. /etc/profile >/dev/null 2>&1; exec /sbin/cli -c "$C460_CLI_CMD"`)
-	cmd.Env = append(os.Environ(), "C460_CLI_CMD="+command)
+	cmd.Env = append(cleanEnv(), "C460_CLI_CMD="+command)
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err != nil {
@@ -33,6 +33,18 @@ func runCLI(parent context.Context, command string) (string, error) {
 		return text, fmt.Errorf("%s: %s", command, text)
 	}
 	return text, nil
+}
+
+// cleanEnv drops LD_PRELOAD: procd's environment preloads a library that is
+// missing on this firmware, and the loader warning would pollute the output.
+func cleanEnv() []string {
+	var env []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "LD_PRELOAD=") {
+			env = append(env, e)
+		}
+	}
+	return env
 }
 
 // ------------------------------------------------------------- management
