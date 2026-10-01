@@ -91,8 +91,8 @@ func (a *Auth) SetCredentials(username, password string) error {
 	if err := validUsername(username); err != nil {
 		return err
 	}
-	if len(password) < 8 {
-		return errors.New("password must be at least 8 characters")
+	if len(password) < 6 {
+		return errors.New("password must be at least 6 characters")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

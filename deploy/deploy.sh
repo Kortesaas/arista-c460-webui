@@ -131,10 +131,10 @@ if [ "$has_auth" != yes ] || [ "$SET_PASSWORD" = 1 ]; then
 	fi
 	[[ "$UI_USER" =~ ^[A-Za-z0-9._-]{1,32}$ ]] || { echo "Username: 1-32 letters, digits, '.', '_' or '-'." >&2; exit 1; }
 	pw1=${C460_UI_PASSWORD:-} pw2=${C460_UI_PASSWORD:-}
-	while [ -z "$pw1" ] || [ "$pw1" != "$pw2" ] || [ ${#pw1} -lt 8 ]; do
-		read -r -s -p "New password (min. 8 characters): " pw1; echo
+	while [ -z "$pw1" ] || [ "$pw1" != "$pw2" ] || [ ${#pw1} -lt 6 ]; do
+		read -r -s -p "New password (min. 6 characters): " pw1; echo
 		read -r -s -p "Repeat: " pw2; echo
-		[ "$pw1" = "$pw2" ] && [ ${#pw1} -ge 8 ] || echo "Passwords differ or are shorter than 8 characters, try again."
+		[ "$pw1" = "$pw2" ] && [ ${#pw1} -ge 6 ] || echo "Passwords differ or are shorter than 6 characters, try again."
 	done
 	printf '%s\n' "$pw1" | ap "$DIR/c460-webui -config $DIR/config.json -set-password -username '$UI_USER'"
 	unset pw1 pw2

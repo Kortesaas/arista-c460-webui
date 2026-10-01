@@ -87,8 +87,8 @@ function PasswordPanel() {
   const [busy, setBusy] = useState(false)
   const problem = !/^[A-Za-z0-9._-]{1,32}$/.test(username)
     ? "Username: 1–32 letters, digits, '.', '_' or '-'."
-    : next && next.length < 8
-      ? 'The new password needs at least 8 characters.'
+    : next && next.length < 6
+      ? 'The new password needs at least 6 characters.'
       : confirm && confirm !== next
         ? 'The passwords do not match.'
         : null

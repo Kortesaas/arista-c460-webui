@@ -43,7 +43,7 @@ cp deploy/gnmi-credentials.example.json secrets/ap1.secret.json   # gitignored; 
 deploy/deploy.sh 192.168.1.40 --gnmi-credentials secrets/ap1.secret.json --site-name "Stage left"
 ```
 
-On the first install the script asks for the web UI administrator login: the username defaults to `config`, and you choose the password (at least 8 characters; no default password is shipped). It then:
+On the first install the script asks for the web UI administrator login: the username defaults to `config`, and you choose the password (at least 6 characters; no default password is shipped). It then:
 
 - installs `/opt/c460-webui/c460-webui`, `config.json` (mode 0600) and `auth.json` (bcrypt hash);
 - installs the procd script as `/opt/c460-webui/c460-webui.init` and links it from `/opt/init.d/c460-webui` and `/etc/rc.d/S0900c460-webui` (symlinks only, see below);
