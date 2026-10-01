@@ -1,0 +1,16 @@
+#!/bin/sh /etc/rc.common
+# procd service for the C-460 local web UI (installed by deploy/deploy.sh).
+
+USE_PROCD=1
+PROG=/opt/c460-webui/c460-webui
+CONF=/opt/c460-webui/config.json
+
+start_service() {
+	procd_open_instance
+	procd_set_param command "$PROG" -config "$CONF"
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	# Retry forever: the OpenConfig agent may come up after us during boot.
+	procd_set_param respawn 3600 5 0
+	procd_close_instance
+}

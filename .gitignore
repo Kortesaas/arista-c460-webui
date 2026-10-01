@@ -1,0 +1,10 @@
+/build/
+/web/node_modules/
+/web/dist/*
+!/web/dist/.gitkeep
+.DS_Store
+
+# Never commit AP credentials
+*.secret.json
+/secrets/
+/deploy/*.local.json
