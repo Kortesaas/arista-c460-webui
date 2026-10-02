@@ -2,15 +2,18 @@ import { useMemo, useState } from 'react'
 import { Search, Users } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
+import { ClientDialog } from '@/components/ClientDetails'
+import type { Client } from '@/types'
 import { Age, BandChip, SignalBars, VlanChip } from '@/components/status'
 import { useApp } from '@/stores/app'
-import { EmptyState, Input, Panel, Select } from '@/ui/kit'
+import { Button, EmptyState, Input, Panel, Select } from '@/ui/kit'
 import { formatBytes } from '@/utils/format'
 
 export function ClientsPage() {
   const state = useApp((store) => store.state)
   const [query, setQuery] = useState('')
   const [ssid, setSsid] = useState('')
+  const [selected, setSelected] = useState<Client | null>(null)
   const clients = useMemo(() => {
     const q = query.trim().toLowerCase()
     return (state?.clients ?? []).filter(
@@ -42,7 +45,11 @@ export function ClientsPage() {
     >
       {clients.length === 0 ? (
         <Panel>
-          <EmptyState icon={<Users size={28} />} title={state.clients.length ? 'No matching clients' : 'No clients connected'} description={state.clients.length ? 'Adjust the search or network filter.' : 'Clients appear here as soon as they join one of the networks.'} />
+          <EmptyState
+            icon={<Users size={28} />}
+            title={state.clients.length ? 'No matching clients' : 'No clients connected'}
+            description={state.clients.length ? 'Adjust the search or network filter.' : 'Clients appear here as soon as they join one of the networks.'}
+          />
         </Panel>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-line bg-surface">
@@ -57,6 +64,7 @@ export function ClientsPage() {
                 <th className="px-3 py-2 text-right">Rate ↓/↑</th>
                 <th className="px-3 py-2 text-right">Traffic</th>
                 <th className="px-3 py-2 text-right">Connected</th>
+                <th className="px-3 py-2 text-right">Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -91,12 +99,18 @@ export function ClientsPage() {
                     ↓ {formatBytes(client.rxBytes)} · ↑ {formatBytes(client.txBytes)}
                   </td>
                   <td className="px-3 py-2 text-right text-[12px] text-muted">{client.connectedSince ? <Age iso={client.connectedSince} /> : '—'}</td>
+                  <td className="px-3 py-2 text-right">
+                    <Button size="sm" aria-label={`Details for ${client.hostname || client.mac}`} onClick={() => setSelected(client)}>
+                      View
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      {selected && <ClientDialog client={selected} onClose={() => setSelected(null)} />}
     </Page>
   )
 }

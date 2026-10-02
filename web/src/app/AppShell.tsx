@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Antenna, Gauge, LogOut, Menu, Monitor, Moon, PanelLeft, Radar, RefreshCw, Server, Sun, Users, Wifi } from 'lucide-react'
+import { Antenna, Activity, Gauge, LogOut, Menu, Monitor, Moon, PanelLeft, Radar, RefreshCw, Server, Sun, Users, Wifi } from 'lucide-react'
 import { cn } from '@/ui/cn'
 import { Brand } from '@/ui/Brand'
 import { Badge } from '@/ui/kit'
@@ -14,6 +14,7 @@ const nav = [
   { label: 'Radios', to: '/radios', icon: Antenna },
   { label: 'Clients', to: '/clients', icon: Users, badge: 'clients' as const },
   { label: 'RF scan', to: '/scan', icon: Radar },
+  { label: 'Diagnostics', to: '/diagnostics', icon: Activity },
   { label: 'System', to: '/system', icon: Server },
 ]
 
@@ -23,6 +24,7 @@ const titles: [string, string][] = [
   ['/radios', 'Radios'],
   ['/clients', 'Clients'],
   ['/scan', 'RF scan'],
+  ['/diagnostics', 'Diagnostics'],
   ['/system', 'System'],
 ]
 

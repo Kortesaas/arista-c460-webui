@@ -1,4 +1,4 @@
-import type { ApState, ManagementInput, RadioInput, SsidInput, TrustCheck } from '@/types'
+import type { ApState, ManagementInput, RadioInput, SsidInput, TrustCheck, TimeSettings, DiagnosticResult, WirelessStatus, NativeClient } from '@/types'
 
 export class ApiError extends Error {
   constructor(
@@ -39,5 +39,11 @@ export const api = {
   trust: () => call<TrustCheck>('GET', '/api/trust'),
   reboot: () => call('POST', '/api/reboot', {}),
   locate: (minutes: number) => call('POST', '/api/locate', { minutes }),
+  time: () => call<TimeSettings>('GET', '/api/time'),
+  updateTime: (primary: string, secondary: string) => call('PUT', '/api/time', { primary, secondary }),
+  diagnose: (tool: string, target: string) => call<DiagnosticResult>('POST', '/api/diagnostics', { tool, target }),
+  wirelessStatus: () => call<{ interfaces: WirelessStatus[]; sampledAt: string }>('GET', '/api/wireless-status'),
+  clientDetails: (mac: string) => call<NativeClient>('GET', `/api/clients/${encodeURIComponent(mac)}/details`),
+  reconnectClient: (mac: string) => call('POST', `/api/clients/${encodeURIComponent(mac)}/reconnect`, {}),
   stopLocate: () => call('DELETE', '/api/locate'),
 }

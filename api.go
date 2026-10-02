@@ -26,9 +26,11 @@ type API struct {
 	poller  *Poller
 	writeMu sync.Mutex // one configuration change at a time
 
-	cli        *CLIInfo
-	cliTrigger chan struct{}
-	stage      func(ManagementRequest, string) error // nil uses native management configuration files
+	cli          *CLIInfo
+	cliTrigger   chan struct{}
+	stage        func(ManagementRequest, string) error // nil uses native management configuration files
+	wirelessDir  string                                // empty uses the firmware socket directory; overridden only in tests
+	diagnosticMu sync.Mutex                            // bounded native diagnostics, independent of configuration writes
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -48,6 +50,12 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/locate", a.protect(a.stopLocate))
 	mux.Handle("PUT /api/settings", a.protect(a.updateSettings))
 	mux.Handle("PUT /api/ssh", a.protect(a.updateSSH))
+	mux.Handle("GET /api/time", a.protect(a.timeSettings))
+	mux.Handle("PUT /api/time", a.protect(a.updateTime))
+	mux.Handle("POST /api/diagnostics", a.protect(a.diagnose))
+	mux.Handle("GET /api/wireless-status", a.protect(a.wirelessStatus))
+	mux.Handle("GET /api/clients/{mac}/details", a.protect(a.clientDetails))
+	mux.Handle("POST /api/clients/{mac}/reconnect", a.protect(a.reconnectClient))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { fail(w, http.StatusNotFound, "unknown endpoint") })
 }
 

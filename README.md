@@ -11,9 +11,11 @@ The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance tha
 - **Overview:** health, clients, radios, uplink, temperature, memory, flash usage.
 - **Wireless networks (read/write):** create, edit and delete SSIDs: name, security (WPA3 Personal, WPA2 Personal, Enhanced Open, Open), password, bands (2.4/5/6 GHz), VLAN tag or untagged, client isolation, hidden, enabled.
 - **Radios (read/write):** channel (regulatory list, DFS marked), channel width, transmit power, automatic channel/power, enable/disable. It shows the effective EIRP, channel utilisation and noise floor.
-- **Clients:** signal, SNR, rates, traffic, IP/hostname where the AP reports them.
+- **Clients:** signal, SNR, rates, traffic, IPv4/IPv6 and hostname, plus live association details and a confirmed reconnect action. Reconnect briefly disconnects the station; it does not ban it.
 - **RF scan:** neighbouring access points with channel occupancy.
 - **Management network (read/write):** static IPv4 or DHCP client, subnet mask, gateway, up to three DNS servers, DNS search domain, and native/untagged or tagged management VLAN. Saved changes apply after an AP restart; the UI shows the destination address.
+- **Time synchronisation (read/write):** primary and secondary NTP servers, service and clock-sync status. Saves use the native encrypted configuration, with local desired settings restored when the WebUI service starts.
+- **Diagnostics:** AP-side ping, DNS lookup and route tracing, plus live per-BSSID state, frequencies, client counts, beacon/DTIM intervals and Wi-Fi protocol flags. Tests have fixed time/output limits.
 - **System:** device/VLAN display names, SSH enable/disable, timed LED location, restart with firmware boot-trust checks, hardware/power/clock/LLDP information, Ethernet ports, and administrator username and password.
 - A small pirate hat spins continuously while the page starts and waits for AP data, including after a restart. Reduced-motion preferences are respected.
 - Light, dark and system themes; works on phones.
@@ -26,7 +28,7 @@ browser ──HTTP :80──▶ c460-webui (Go, on the AP) ──gNMI/TLS 127.0.
 
 The backend is a single static ARM64 Go binary with the React UI embedded (about 12 MB). Wireless and SSH settings use the AP's OpenConfig (gNMI) agent. Management addresses, DNS and management VLAN are staged in the firmware's native `ifcfg-br0[.<VLAN>]` and discovery configuration files, preserving IPv6 and other discovery fields; the native management CLI reboots automatically, so it is deliberately not used for saving. Writes use the vendor's interface lock and roll back on failure. The AP consumes the saved settings at the next explicit restart. A boot-ID marker keeps the pending-restart notice accurate across web-service restarts. LED location and reboot use the native vendor CLI. The agent's TLS certificate is pinned from `/opt/openconfig/cert/agent.crt`. Every OpenConfig AP-level write also re-sends the API user; this firmware otherwise resets API authentication on such writes.
 
-Tested on a C-460 with firmware **18.2.0-32**.
+Tested on a C-460 with firmware **18.2.0-32**. See [native feature findings and verification](docs/native-features.md) for the additional root-access adapters and their limits.
 
 ## Requirements per access point
 
@@ -70,7 +72,7 @@ At every boot the C-460 firmware (`/etc/rc.d/fs_init`) checks its writable layer
 - `/opt/passwd`, `/opt/group`, `/opt/shells`, `/opt/sensor/sensor-shell`, `/opt/sensor/sensor.md5` or `/etc/shadow` differ from the image (they are measured into TPM PCR 7);
 - a vendor file listed in `/opt/sensor/sensor.md5` was modified.
 
-This project only writes under `/opt/c460-webui/` and creates symlinks. Before rebooting after **any** manual change on the AP, run:
+Custom executable files live under `/opt/c460-webui/`, with symlinks in the protected service directories. Settings use the native writable network/discovery files and encrypted sensor configuration. Before rebooting after **any** manual change on the AP, run:
 
 ```bash
 deploy/deploy.sh <ap> --check      # runs deploy/overlay-check.sh on the AP, read-only
@@ -111,6 +113,6 @@ Project layout: `*.go` contains the backend (`gnmi.go` agent client, `state.go` 
 ## Known limitations
 
 - Management configuration currently covers IPv4. DHCP mode configures the AP as a DHCP client, not a DHCP server. It does not change router/switch settings or wireless-client DHCP scopes. Tagged management needs a matching switch trunk; a new address must be reachable from the administrator's network.
-- Ethernet uplink selection, IPv6 management and NTP server configuration are not editable yet. Hardware, clock-sync and Ethernet status are shown where available.
+- Ethernet uplink selection and IPv6 management are not editable yet. Hardware, clock-sync and Ethernet status are shown where available.
 - The AP's OpenConfig converter rejects some modelled fields (for example WPA2/WPA3 transition mode, DHCP-required, some 802.11r/v timers), so the UI does not offer them.
 - Client detail fields are only shown when the firmware populates them.

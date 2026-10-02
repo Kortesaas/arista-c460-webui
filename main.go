@@ -145,6 +145,11 @@ func main() {
 		return
 	}
 
+	// Restore locally selected native settings before accepting browser writes.
+	if err := restoreTimeSettings(context.Background()); err != nil {
+		log.Printf("restore time settings: %v", err)
+	}
+
 	gnmi, err := DialGNMI(cfg.GNMI, cfg.Hostname)
 	if err != nil {
 		log.Fatalf("gnmi: %v", err)

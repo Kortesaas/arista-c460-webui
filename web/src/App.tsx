@@ -10,6 +10,7 @@ import { WirelessPage } from '@/pages/Wireless'
 import { RadiosPage } from '@/pages/Radios'
 import { ClientsPage } from '@/pages/Clients'
 import { ScanPage } from '@/pages/Scan'
+import { DiagnosticsPage } from '@/pages/Diagnostics'
 import { SystemPage } from '@/pages/System'
 
 export function App() {
@@ -32,6 +33,7 @@ export function App() {
             <Route path="/radios" element={<RadiosPage />} />
             <Route path="/clients" element={<ClientsPage />} />
             <Route path="/scan" element={<ScanPage />} />
+            <Route path="/diagnostics" element={<DiagnosticsPage />} />
             <Route path="/system" element={<SystemPage />} />
             <Route path="*" element={<Navigate to="/overview" replace />} />
           </Routes>

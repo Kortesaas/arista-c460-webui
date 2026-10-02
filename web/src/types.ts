@@ -192,3 +192,28 @@ export interface RadioInput {
   dca: boolean
   dtp: boolean
 }
+
+export interface TimeSettings {
+  primary: string
+  secondary: string
+  managed: boolean
+  synced: boolean | null
+  running: boolean
+}
+export interface DiagnosticResult {
+  tool: string
+  target: string
+  output: string
+  success: boolean
+  timedOut: boolean
+  durationMs: number
+}
+export interface WirelessStatus {
+  interface: string
+  values: Record<string, string>
+  error?: string
+}
+export interface NativeClient {
+  interface: string
+  values: Record<string, string>
+}
