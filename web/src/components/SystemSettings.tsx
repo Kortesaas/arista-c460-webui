@@ -502,7 +502,7 @@ export function HardwarePanel({ state }: { state: ApState }) {
         items={[
           { label: 'Serial number', value: hw?.serial || '—', mono: true },
           { label: 'Power source', value: hw?.powerSource || '—' },
-          { label: 'Radio power', value: hw?.radioPower || '—' },
+          { label: '6 GHz power class', value: hw?.radioPower || '—' },
           { label: 'Clock sync', value: hw?.ntpSynced === null || hw?.ntpSynced === undefined ? 'Unknown' : hw.ntpSynced ? 'Synchronised (NTP)' : 'Not synchronised' },
         ]}
       />

@@ -30,7 +30,8 @@ func runVendorTool(parent context.Context, tool string, args ...string) (string,
 	cmd := exec.CommandContext(ctx, "/bin/sh", argv...)
 	cmd.Env = cleanEnv()
 	cmd.WaitDelay = 500 * time.Millisecond
-	var out, diagnostic cappedOutput
+	out := cappedOutput{limit: 128 * 1024}
+	var diagnostic cappedOutput
 	cmd.Stdout = &out
 	cmd.Stderr = &diagnostic
 	if err := cmd.Run(); err != nil {

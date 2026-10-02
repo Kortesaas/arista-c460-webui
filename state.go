@@ -143,16 +143,36 @@ func NewPoller(g *GNMI, cfg *Config, interval time.Duration) *Poller {
 }
 
 func (p *Poller) Run(ctx context.Context) {
-	ticker := time.NewTicker(p.interval)
-	defer ticker.Stop()
-	for {
+	for ctx.Err() == nil {
+		started := time.Now()
 		p.poll(ctx)
+		p.mu.RLock()
+		interval := p.interval
+		p.mu.RUnlock()
+		// Schedule from the start of the read, with no overlap or catch-up burst.
+		delay := interval - time.Since(started)
+		if delay < 100*time.Millisecond {
+			delay = 100 * time.Millisecond
+		}
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-timer.C:
 		case <-p.trigger:
+			timer.Stop()
 		}
+	}
+}
+func (p *Poller) SetInterval(seconds int) {
+	p.mu.Lock()
+	p.interval = time.Duration(seconds) * time.Second
+	p.state.PollSeconds = seconds
+	p.mu.Unlock()
+	select {
+	case p.trigger <- struct{}{}:
+	default:
 	}
 }
 
@@ -192,13 +212,14 @@ func (p *Poller) poll(ctx context.Context) {
 	p.raw = tree
 	st := build(tree)
 	supplementClientAddresses(st.Clients, readARPAddresses())
+	supplementEthernet(st.Interfaces, "/sys/class/net")
 	st.Device = device
 	st.Device.Hostname = p.gnmi.host
 	if v, ok := dig(tree, "system", "ssh-server", "config", "enable").(bool); ok {
 		st.Device.SSHEnabled = v
 	}
 	st.GeneratedAt = time.Now()
-	st.PollSeconds = p.cfg.PollSeconds
+	st.PollSeconds = p.cfg.RefreshSeconds()
 	_, st.VLANNames = p.cfg.Labels()
 	p.state = st
 }

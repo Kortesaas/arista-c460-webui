@@ -17,8 +17,9 @@ The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance tha
 - **RF scan:** neighbouring access points with channel occupancy.
 - **Management network (read/write):** static IPv4 or DHCP client, subnet mask, gateway, up to three DNS servers, DNS search domain, and native/untagged or tagged management VLAN. Saved changes apply after an AP restart; the UI shows the destination address.
 - **Time synchronisation (read/write):** primary and secondary NTP servers, service and clock-sync status. Saves use the native encrypted configuration, with local desired settings restored when the WebUI service starts.
-- **Diagnostics:** AP-side ping, DNS lookup, route tracing and TCP-port connectivity, plus live per-BSSID state, frequencies, client counts, beacon/DTIM intervals and Wi-Fi protocol flags. Tests have fixed time/output limits.
+- **Diagnostics:** AP-side ping, DNS lookup, route tracing and TCP-port connectivity; VLAN/bridge paths, management routes and learned neighbours; searchable wireless connection, channel and radar events with text export; and live per-BSSID operating state. Tests have fixed time/output limits. Client details can prefill a connection test.
 - **System:** device/VLAN display names, SSH enable/disable, timed LED location, restart with firmware boot-trust checks, hardware/power/clock/LLDP information, Ethernet ports, and administrator username and password.
+- **Live updates:** shared AP sampling configurable from 1–60 seconds (default 5). Browsers follow that cadence, pause in background tabs, share pending requests and back off during an outage. Slow AP reads can extend the interval; detailed hardware information remains a separate, slower sample.
 - A small pirate hat spins continuously while the page starts and waits for AP data, including after a restart. Reduced-motion preferences are respected.
 - Light, dark and system themes; works on phones.
 
@@ -87,7 +88,7 @@ deploy/deploy.sh <ap> --check      # runs deploy/overlay-check.sh on the AP, rea
 | Key | Default | Meaning |
 |---|---|---|
 | `listen` | `:80` | HTTP listen address |
-| `pollSeconds` | `5` | How often the AP state is read |
+| `pollSeconds` | `5` | Shared AP sampling interval, 1–60 seconds; editable in System → Live updates |
 | `authFile` | `/opt/c460-webui/auth.json` | Username and bcrypt password hash |
 | `hostname` | eth0 MAC with dashes | OpenConfig access-point key |
 | `siteName` | — | Label shown in the UI |

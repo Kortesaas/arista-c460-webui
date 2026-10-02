@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { api } from '@/api'
@@ -7,6 +8,7 @@ import { Badge, Button, Dialog, DialogActions, KeyValue, Spinner } from '@/ui/ki
 import { formatBytes, formatDuration } from '@/utils/format'
 
 export function ClientDialog({ client, onClose }: { client: Client; onClose: () => void }) {
+  const navigate = useNavigate()
   const [native, setNative] = useState<NativeClient | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -94,6 +96,17 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
         </div>
       )}
       <DialogActions>
+        {!confirm && client.ipv4 && (
+          <Button
+            disabled={busy}
+            onClick={() => {
+              onClose()
+              navigate(`/diagnostics?target=${encodeURIComponent(client.ipv4)}`)
+            }}
+          >
+            Test connection
+          </Button>
+        )}
         <Button disabled={busy} onClick={() => (confirm ? setConfirm(false) : onClose())}>
           {confirm ? 'Cancel' : 'Close'}
         </Button>

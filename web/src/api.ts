@@ -11,6 +11,8 @@ import type {
   SsidFeatures,
   LldpState,
   LldpTiming,
+  NetworkSnapshot,
+  WirelessEventLog,
 } from '@/types'
 
 export class ApiError extends Error {
@@ -41,6 +43,9 @@ export const api = {
   login: (username: string, password: string) => call<{ authenticated: boolean }>('POST', '/api/login', { username, password }),
   logout: () => call('POST', '/api/logout', {}),
   changeCredentials: (current: string, username: string, next: string) => call('POST', '/api/password', { current, username, next }),
+  updateRefresh: (seconds: number) => call('PUT', '/api/refresh', { seconds }),
+  network: () => call<NetworkSnapshot>('GET', '/api/network'),
+  events: () => call<WirelessEventLog>('GET', '/api/events'),
   state: () => call<ApState>('GET', '/api/state'),
   createSsid: (input: SsidInput) => call('POST', '/api/ssids', input),
   updateSsid: (name: string, input: SsidInput) => call('PUT', `/api/ssids/${encodeURIComponent(name)}`, input),

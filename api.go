@@ -30,7 +30,11 @@ type API struct {
 	cliTrigger   chan struct{}
 	stage        func(ManagementRequest, string) error // nil uses native management configuration files
 	wirelessDir  string                                // empty uses the firmware socket directory; overridden only in tests
-	diagnosticMu sync.Mutex                            // bounded native diagnostics, independent of configuration writes
+	networkMu    sync.Mutex
+	networkCache *NetworkSnapshot
+	eventMu      sync.Mutex
+	eventCache   *WirelessEventLog
+	diagnosticMu sync.Mutex // bounded native diagnostics, independent of configuration writes
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -39,6 +43,9 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/logout", a.logout)
 	mux.Handle("POST /api/password", a.protect(a.changePassword))
 	mux.Handle("GET /api/state", a.protect(a.state))
+	mux.Handle("PUT /api/refresh", a.protect(a.updateRefresh))
+	mux.Handle("GET /api/network", a.protect(a.networkStatus))
+	mux.Handle("GET /api/events", a.protect(a.wirelessEvents))
 	mux.Handle("POST /api/ssids", a.protect(a.createSSID))
 	mux.Handle("GET /api/ssids/{name}/features", a.protect(a.getSSIDFeatures))
 	mux.Handle("PUT /api/ssids/{name}/features", a.protect(a.updateSSIDFeatures))
@@ -597,4 +604,25 @@ func (a *API) updateSSH(w http.ResponseWriter, r *http.Request) {
 	defer a.writeMu.Unlock()
 	a.apply(w, r, fmt.Sprintf("set SSH server enabled=%t", body.Enabled),
 		map[string]any{"system": map[string]any{"ssh-server": map[string]any{"config": map[string]any{"enable": body.Enabled}}}}, nil)
+}
+
+func (a *API) updateRefresh(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Seconds int `json:"seconds"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	if input.Seconds < 1 || input.Seconds > 60 {
+		fail(w, 400, "Refresh interval must be 1–60 seconds")
+		return
+	}
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
+	if err := a.cfg.SetRefresh(input.Seconds); err != nil {
+		fail(w, 500, "Could not save refresh interval")
+		return
+	}
+	a.poller.SetInterval(input.Seconds)
+	reply(w, 200, map[string]bool{"ok": true})
 }

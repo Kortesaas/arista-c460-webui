@@ -14,7 +14,7 @@ backend:
 
 check:
 	$(GO) vet ./...
-	cd web && npm run typecheck
+	cd web && npm run typecheck && npm test
 
 # Frontend dev server; proxies /api to C460_BACKEND (default http://127.0.0.1:18099,
 # e.g. an SSH tunnel: ssh -L 18099:127.0.0.1:80 root@<ap>).

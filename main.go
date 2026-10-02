@@ -72,8 +72,11 @@ func loadConfig(path string) (*Config, error) {
 		return nil, errors.New("gnmi.username and gnmi.password are required")
 	}
 	cfg.path = path
-	if cfg.PollSeconds < 2 {
-		cfg.PollSeconds = 2
+	if cfg.PollSeconds < 1 {
+		cfg.PollSeconds = 1
+	}
+	if cfg.PollSeconds > 60 {
+		cfg.PollSeconds = 60
 	}
 	if cfg.Hostname == "" {
 		mac, err := os.ReadFile("/sys/class/net/eth0/address")
@@ -96,20 +99,45 @@ func (c *Config) Labels() (string, map[string]string) {
 	return c.SiteName, names
 }
 
-// SetLabels updates the display settings and rewrites the config file (mode 0600).
-func (c *Config) SetLabels(site string, names map[string]string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.SiteName, c.VLANNames = site, names
+// RefreshSeconds reads the shared sampling interval safely.
+func (c *Config) RefreshSeconds() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.PollSeconds
+}
+func (c *Config) saveLocked() error {
 	raw, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp := c.path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+	return atomicNative(c.path, raw, 0600)
+}
+func (c *Config) SetRefresh(seconds int) error {
+	if seconds < 1 || seconds > 60 {
+		return errors.New("refresh interval must be 1–60 seconds")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	previous := c.PollSeconds
+	c.PollSeconds = seconds
+	if err := c.saveLocked(); err != nil {
+		c.PollSeconds = previous
 		return err
 	}
-	return os.Rename(tmp, c.path)
+	return nil
+}
+
+// SetLabels updates the display settings and preserves all other configuration.
+func (c *Config) SetLabels(site string, names map[string]string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	oldSite, oldNames := c.SiteName, c.VLANNames
+	c.SiteName, c.VLANNames = site, names
+	if err := c.saveLocked(); err != nil {
+		c.SiteName, c.VLANNames = oldSite, oldNames
+		return err
+	}
+	return nil
 }
 
 func main() {

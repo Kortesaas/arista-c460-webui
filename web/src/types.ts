@@ -234,3 +234,28 @@ export interface LldpState extends LldpTiming {
   neighborError?: string
   neighbors: { interface: string; name: string; description: string; chassisId: string; portId: string; portDescription: string; addresses: string[]; age: string; ttl: string }[]
 }
+
+export interface NetworkSnapshot {
+  sampledAt: string
+  warnings: string[]
+  bridges: { name: string; vlan: number | null; vlanMode: string; up: boolean; addresses: string[]; members: string[]; networks: string[] }[]
+  routes: { dst: string; gateway: string; dev: string }[]
+  neighbors: { dst: string; dev: string; lladdr: string; state: string[]; gateway: boolean }[]
+}
+export interface WirelessEvent {
+  id: string
+  time: string
+  kind: string
+  summary: string
+  tone: string
+  interface: string
+  network: string
+  client: string
+  frequency: string
+}
+export interface WirelessEventLog {
+  events: WirelessEvent[]
+  sampledAt: string
+  clockSynced: boolean | null
+  error?: string
+}

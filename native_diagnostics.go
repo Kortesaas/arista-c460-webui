@@ -61,15 +61,20 @@ func diagnosticArgs(v DiagnosticInput) ([]string, error) {
 
 type cappedOutput struct {
 	sync.Mutex
-	data []byte
+	data  []byte
+	limit int
 }
 
 func (b *cappedOutput) Write(p []byte) (int, error) {
 	b.Lock()
 	defer b.Unlock()
 	n := len(p)
-	if len(b.data) < 16384 {
-		remaining := 16384 - len(b.data)
+	limit := b.limit
+	if limit == 0 {
+		limit = 16384
+	}
+	if len(b.data) < limit {
+		remaining := limit - len(b.data)
 		if len(p) > remaining {
 			p = p[:remaining]
 		}

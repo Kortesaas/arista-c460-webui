@@ -3,6 +3,7 @@ import { KeyRound } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
 import { DisplaySettingsPanel, HardwarePanel, MaintenancePanel, ManagementPanel } from '@/components/SystemSettings'
+import { RefreshPanel } from '@/components/RefreshSettings'
 import { LldpPanel } from '@/components/LldpSettings'
 import { TimePanel } from '@/components/TimeSettings'
 import { Dot } from '@/components/status'
@@ -21,6 +22,7 @@ export function SystemPage() {
         <div className="space-y-3">
           <ManagementPanel state={state} />
           <TimePanel />
+          <RefreshPanel />
           <DisplaySettingsPanel state={state} />
           <Panel title="Device">
             <KeyValue

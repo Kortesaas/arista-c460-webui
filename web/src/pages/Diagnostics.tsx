@@ -1,25 +1,50 @@
+import { useSearchParams } from 'react-router-dom'
+import { NetworkPathsPanel, WirelessEventsPanel } from '@/components/NetworkDiagnostics'
 import { useEffect, useState } from 'react'
 import { Activity, Play, RefreshCw } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
 import type { DiagnosticResult, WirelessStatus } from '@/types'
-import { Badge, Button, EmptyState, Field, Input, Panel, Select, Spinner } from '@/ui/kit'
+import { Badge, Button, EmptyState, Field, Input, Panel, Select, Spinner, Segmented } from '@/ui/kit'
 
 export function DiagnosticsPage() {
+  const [params, setParams] = useSearchParams()
+  const views = ['connectivity', 'paths', 'wireless', 'events'] as const
+  const view = views.includes(params.get('view') as (typeof views)[number]) ? params.get('view')! : 'connectivity'
   return (
-    <Page title="Diagnostics" description="Test connectivity from the AP and inspect its live wireless interfaces.">
-      <div className="space-y-3">
-        <ConnectivityPanel />
-        <WirelessStatusPanel />
-      </div>
+    <Page
+      title="Diagnostics"
+      description="Test connections, inspect VLAN paths and review recent wireless events."
+      actions={
+        <Segmented
+          value={view}
+          onChange={(value) => {
+            const next = new URLSearchParams(params)
+            next.set('view', value)
+            setParams(next)
+          }}
+          options={[
+            { value: 'connectivity', label: 'Connectivity' },
+            { value: 'paths', label: 'Network paths' },
+            { value: 'wireless', label: 'Wireless' },
+            { value: 'events', label: 'Events' },
+          ]}
+        />
+      }
+    >
+      {view === 'connectivity' && <ConnectivityPanel />}
+      {view === 'paths' && <NetworkPathsPanel />}
+      {view === 'wireless' && <WirelessStatusPanel />}
+      {view === 'events' && <WirelessEventsPanel />}
     </Page>
   )
 }
 function ConnectivityPanel() {
   const gateway = useApp((s) => s.state?.device.gateway)
   const [tool, setTool] = useState('ping')
-  const [target, setTarget] = useState('')
+  const [params] = useSearchParams()
+  const [target, setTarget] = useState(params.get('target') || '')
   const [port, setPort] = useState('80')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<DiagnosticResult | null>(null)

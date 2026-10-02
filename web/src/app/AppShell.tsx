@@ -83,7 +83,7 @@ function LiveStatus({ collapsed }: { collapsed: boolean }) {
         )}
       </div>
       <p className="truncate text-faint" title={error ?? undefined}>
-        {error ?? `Refreshing every ${state?.pollSeconds ?? 5}s`}
+        {error ?? `Updates every ${state?.pollSeconds ?? 5}s`}
       </p>
     </div>
   )
