@@ -3,6 +3,7 @@ import { KeyRound } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
 import { DisplaySettingsPanel, HardwarePanel, MaintenancePanel, ManagementPanel } from '@/components/SystemSettings'
+import { LldpPanel } from '@/components/LldpSettings'
 import { TimePanel } from '@/components/TimeSettings'
 import { Dot } from '@/components/status'
 import { api } from '@/api'
@@ -73,6 +74,7 @@ export function SystemPage() {
               </tbody>
             </table>
           </Panel>
+          <LldpPanel />
           <MaintenancePanel state={state} />
           <PasswordPanel />
           <Panel title="About">

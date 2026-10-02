@@ -1,4 +1,17 @@
-import type { ApState, ManagementInput, RadioInput, SsidInput, TrustCheck, TimeSettings, DiagnosticResult, WirelessStatus, NativeClient } from '@/types'
+import type {
+  ApState,
+  ManagementInput,
+  RadioInput,
+  SsidInput,
+  TrustCheck,
+  TimeSettings,
+  DiagnosticResult,
+  WirelessStatus,
+  NativeClient,
+  SsidFeatures,
+  LldpState,
+  LldpTiming,
+} from '@/types'
 
 export class ApiError extends Error {
   constructor(
@@ -32,6 +45,10 @@ export const api = {
   createSsid: (input: SsidInput) => call('POST', '/api/ssids', input),
   updateSsid: (name: string, input: SsidInput) => call('PUT', `/api/ssids/${encodeURIComponent(name)}`, input),
   deleteSsid: (name: string) => call('DELETE', `/api/ssids/${encodeURIComponent(name)}`),
+  ssidFeatures: (name: string) => call<SsidFeatures>('GET', `/api/ssids/${encodeURIComponent(name)}/features`),
+  updateSsidFeatures: (name: string, rrm: boolean | null, load: boolean | null) => call('PUT', `/api/ssids/${encodeURIComponent(name)}/features`, { rrm, load }),
+  lldp: () => call<LldpState>('GET', '/api/lldp'),
+  updateLldp: (timing: LldpTiming) => call('PUT', '/api/lldp', timing),
   updateRadio: (id: number, input: RadioInput) => call('PUT', `/api/radios/${id}`, input),
   updateManagement: (input: ManagementInput) => call<{ ok: boolean; changed: boolean; rebootRequired: boolean }>('PUT', '/api/management', input),
   updateSettings: (siteName: string, vlanNames: Record<string, string>) => call('PUT', '/api/settings', { siteName, vlanNames }),
@@ -41,7 +58,7 @@ export const api = {
   locate: (minutes: number) => call('POST', '/api/locate', { minutes }),
   time: () => call<TimeSettings>('GET', '/api/time'),
   updateTime: (primary: string, secondary: string) => call('PUT', '/api/time', { primary, secondary }),
-  diagnose: (tool: string, target: string) => call<DiagnosticResult>('POST', '/api/diagnostics', { tool, target }),
+  diagnose: (tool: string, target: string, port?: number) => call<DiagnosticResult>('POST', '/api/diagnostics', { tool, target, port }),
   wirelessStatus: () => call<{ interfaces: WirelessStatus[]; sampledAt: string }>('GET', '/api/wireless-status'),
   clientDetails: (mac: string) => call<NativeClient>('GET', `/api/clients/${encodeURIComponent(mac)}/details`),
   reconnectClient: (mac: string) => call('POST', `/api/clients/${encodeURIComponent(mac)}/reconnect`, {}),

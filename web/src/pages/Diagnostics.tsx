@@ -20,6 +20,7 @@ function ConnectivityPanel() {
   const gateway = useApp((s) => s.state?.device.gateway)
   const [tool, setTool] = useState('ping')
   const [target, setTarget] = useState('')
+  const [port, setPort] = useState('80')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<DiagnosticResult | null>(null)
   const [error, setError] = useState('')
@@ -28,7 +29,7 @@ function ConnectivityPanel() {
     setError('')
     setResult(null)
     try {
-      setResult(await api.diagnose(tool, target.trim()))
+      setResult(await api.diagnose(tool, target.trim(), tool === 'tcp' ? Number(port) : undefined))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -41,7 +42,7 @@ function ConnectivityPanel() {
         className="grid items-end gap-3 sm:grid-cols-[160px_1fr_auto]"
         onSubmit={(e) => {
           e.preventDefault()
-          if (!busy) void run()
+          if (!busy && (tool !== 'tcp' || (Number.isInteger(Number(port)) && Number(port) >= 1 && Number(port) <= 65535))) void run()
         }}
       >
         <Field label="Test">
@@ -49,26 +50,34 @@ function ConnectivityPanel() {
             <option value="ping">Ping</option>
             <option value="dns">DNS lookup</option>
             <option value="trace">Trace route</option>
+            <option value="tcp">TCP port</option>
           </Select>
         </Field>
-        <Field label="Target">
-          <Input
-            required
-            maxLength={253}
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder={tool === 'dns' ? 'aboutus-net.intern' : gateway || 'Hostname or IP address'}
-            disabled={busy}
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-          />
-        </Field>
+        <div className="flex items-end gap-2">
+          <Field label="Target" className="min-w-0 flex-1">
+            <Input
+              required
+              maxLength={253}
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder={tool === 'dns' ? 'aboutus-net.intern' : gateway || 'Hostname or IP address'}
+              disabled={busy}
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+            />
+          </Field>
+          {tool === 'tcp' && (
+            <Field label="Port" className="w-24">
+              <Input type="number" min={1} max={65535} required disabled={busy} value={port} onChange={(e) => setPort(e.target.value)} />
+            </Field>
+          )}
+        </div>
         <Button type="submit" variant="primary" disabled={busy || !target.trim()}>
           {busy ? <Spinner size={13} /> : <Play size={13} />} {busy ? 'Testing…' : 'Run test'}
         </Button>
       </form>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-faint">
-        <span>Runs from the AP’s management network. Stops within 15 seconds.</span>
+        <span>Runs from the AP’s management network. {tool === 'tcp' ? 'Connects within 5 seconds.' : 'Stops within 15 seconds.'}</span>
         {gateway && (
           <button
             type="button"
@@ -92,7 +101,10 @@ function ConnectivityPanel() {
         <div className="mt-4 overflow-hidden rounded border border-line">
           <div className="flex items-center gap-2 border-b border-line bg-surface-2 px-3 py-2">
             <Badge tone={result.success ? 'ok' : 'warn'}>{result.timedOut ? 'Timed out' : result.success ? 'Completed' : 'Failed'}</Badge>
-            <span className="mono min-w-0 flex-1 truncate text-xs text-muted">{result.target}</span>
+            <span className="mono min-w-0 flex-1 truncate text-xs text-muted">
+              {result.target}
+              {result.port ? ` · port ${result.port}` : ''}
+            </span>
             <span className="tabular text-[11px] text-faint">{(result.durationMs / 1000).toFixed(1)} s</span>
           </div>
           <pre aria-live="polite" className="mono max-h-80 overflow-auto whitespace-pre-wrap break-all p-3 text-[12px] leading-5 text-muted">

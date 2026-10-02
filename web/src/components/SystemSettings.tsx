@@ -497,14 +497,13 @@ function RebootDialog({ management, onClose }: { management: Management; onClose
 export function HardwarePanel({ state }: { state: ApState }) {
   const hw = state.hardware
   return (
-    <Panel title="Hardware and neighbour">
+    <Panel title="Hardware">
       <KeyValue
         items={[
           { label: 'Serial number', value: hw?.serial || '—', mono: true },
           { label: 'Power source', value: hw?.powerSource || '—' },
           { label: 'Radio power', value: hw?.radioPower || '—' },
           { label: 'Clock sync', value: hw?.ntpSynced === null || hw?.ntpSynced === undefined ? 'Unknown' : hw.ntpSynced ? 'Synchronised (NTP)' : 'Not synchronised' },
-          ...Object.entries(hw?.lldp ?? {}).map(([label, value]) => ({ label: label.replaceAll('_', ' '), value })),
         ]}
       />
     </Panel>

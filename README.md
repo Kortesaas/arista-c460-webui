@@ -10,12 +10,14 @@ The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance tha
 
 - **Overview:** health, clients, radios, uplink, temperature, memory, flash usage.
 - **Wireless networks (read/write):** create, edit and delete SSIDs: name, security (WPA3 Personal, WPA2 Personal, Enhanced Open, Open), password, bands (2.4/5/6 GHz), VLAN tag or untagged, client isolation, hidden, enabled.
+- **Advanced wireless settings (read/write):** per-SSID 802.11k radio measurements and BSS-load advertising, with firmware-default choices and actual per-band driver readback.
+- **Switch discovery (read/write):** live LLDP neighbours and ports, advertisement interval and hold multiplier. Explicit timing settings are stored locally and restored if the daemon resets them.
 - **Radios (read/write):** channel (regulatory list, DFS marked), channel width, transmit power, automatic channel/power, enable/disable. It shows the effective EIRP, channel utilisation and noise floor.
 - **Clients:** signal, SNR, rates, traffic, IPv4/IPv6 and hostname (including static IPv4 learned through ARP), plus live association details and a confirmed reconnect action. Reconnect briefly disconnects the station; it does not ban it.
 - **RF scan:** neighbouring access points with channel occupancy.
 - **Management network (read/write):** static IPv4 or DHCP client, subnet mask, gateway, up to three DNS servers, DNS search domain, and native/untagged or tagged management VLAN. Saved changes apply after an AP restart; the UI shows the destination address.
 - **Time synchronisation (read/write):** primary and secondary NTP servers, service and clock-sync status. Saves use the native encrypted configuration, with local desired settings restored when the WebUI service starts.
-- **Diagnostics:** AP-side ping, DNS lookup and route tracing, plus live per-BSSID state, frequencies, client counts, beacon/DTIM intervals and Wi-Fi protocol flags. Tests have fixed time/output limits.
+- **Diagnostics:** AP-side ping, DNS lookup, route tracing and TCP-port connectivity, plus live per-BSSID state, frequencies, client counts, beacon/DTIM intervals and Wi-Fi protocol flags. Tests have fixed time/output limits.
 - **System:** device/VLAN display names, SSH enable/disable, timed LED location, restart with firmware boot-trust checks, hardware/power/clock/LLDP information, Ethernet ports, and administrator username and password.
 - A small pirate hat spins continuously while the page starts and waits for AP data, including after a restart. Reduced-motion preferences are respected.
 - Light, dark and system themes; works on phones.

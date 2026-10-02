@@ -27,12 +27,12 @@ func TestNativeHostValidation(t *testing.T) {
 	if err := (TimeInput{Primary: "ntp.example", Secondary: "NTP.EXAMPLE"}).validate(); err == nil {
 		t.Fatal("accepted duplicate NTP servers")
 	}
-	for _, v := range []DiagnosticInput{{"shell", "127.0.0.1"}, {"ping", "-c"}, {"dns", "a;reboot"}} {
+	for _, v := range []DiagnosticInput{{Tool: "shell", Target: "127.0.0.1"}, {Tool: "ping", Target: "-c"}, {Tool: "dns", Target: "a;reboot"}} {
 		if _, err := diagnosticArgs(v); err == nil {
 			t.Errorf("accepted %+v", v)
 		}
 	}
-	args, err := diagnosticArgs(DiagnosticInput{"ping", "::1"})
+	args, err := diagnosticArgs(DiagnosticInput{Tool: "ping", Target: "::1"})
 	if err != nil || args[0] != "ping6" {
 		t.Fatal(args, err)
 	}

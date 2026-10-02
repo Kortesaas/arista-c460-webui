@@ -172,6 +172,7 @@ func main() {
 	api := &API{cfg: cfg, auth: auth, gnmi: gnmi, poller: poller, cli: cliInfo, cliTrigger: cliTrigger}
 	mux := http.NewServeMux()
 	api.Register(mux)
+	go api.maintainLLDP(ctx)
 	mux.Handle("/", spaHandler(dist))
 
 	server := &http.Server{

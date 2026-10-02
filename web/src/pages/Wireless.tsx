@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Eye, EyeOff, Pencil, Plus, Trash2, Wifi } from 'lucide-react'
+import { Eye, EyeOff, Pencil, Plus, Trash2, Wifi, SlidersHorizontal } from 'lucide-react'
 import { Page } from '@/app/Page'
+import { WirelessFeaturesDialog } from '@/components/WirelessFeatures'
 import { LoadingState } from '@/components/Loading'
 import { BandChip, Dot, VlanChip } from '@/components/status'
 import { api } from '@/api'
@@ -18,6 +19,7 @@ const allows6 = (mode: string) => mode === 'WPA3_SAE' || mode === 'ENHANCED_OPEN
 export function WirelessPage() {
   const state = useApp((store) => store.state)
   const [editing, setEditing] = useState<Ssid | 'new' | null>(null)
+  const [advanced, setAdvanced] = useState<Ssid | null>(null)
   const [deleting, setDeleting] = useState<Ssid | null>(null)
   if (!state) return <LoadingState />
 
@@ -33,7 +35,12 @@ export function WirelessPage() {
     >
       {state.ssids.length === 0 ? (
         <Panel>
-          <EmptyState icon={<Wifi size={28} />} title="No wireless networks" description="Add a network to start broadcasting." action={<Button onClick={() => setEditing('new')}>Add network</Button>} />
+          <EmptyState
+            icon={<Wifi size={28} />}
+            title="No wireless networks"
+            description="Add a network to start broadcasting."
+            action={<Button onClick={() => setEditing('new')}>Add network</Button>}
+          />
         </Panel>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-line bg-surface">
@@ -46,7 +53,7 @@ export function WirelessPage() {
                 <th className="px-3 py-2">VLAN</th>
                 <th className="px-3 py-2 text-right">Clients</th>
                 <th className="px-3 py-2 text-right">Traffic</th>
-                <th className="w-20 px-3 py-2" />
+                <th className="w-28 px-3 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -84,6 +91,9 @@ export function WirelessPage() {
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex justify-end gap-0.5">
+                      <IconButton label={`Advanced settings for ${ssid.name}`} onClick={() => setAdvanced(ssid)}>
+                        <SlidersHorizontal size={14} />
+                      </IconButton>
                       <IconButton label={`Edit ${ssid.name}`} onClick={() => setEditing(ssid)}>
                         <Pencil size={14} />
                       </IconButton>
@@ -100,9 +110,15 @@ export function WirelessPage() {
       )}
 
       <p className="mt-3 text-[12px] text-faint">
-        {plural(state.ssids.length, 'network')} · {plural(state.ssids.reduce((sum, ssid) => sum + ssid.bssids.length, 0), 'BSSID')} broadcasting. Saving a change restarts Wi-Fi on this AP for a few seconds.
+        {plural(state.ssids.length, 'network')} ·{' '}
+        {plural(
+          state.ssids.reduce((sum, ssid) => sum + ssid.bssids.length, 0),
+          'BSSID',
+        )}{' '}
+        broadcasting. Saving a change restarts Wi-Fi on this AP for a few seconds.
       </p>
 
+      {advanced && <WirelessFeaturesDialog name={advanced.name} onClose={() => setAdvanced(null)} />}
       {editing && <SsidDialog ssid={editing === 'new' ? null : editing} existing={state.ssids.map((ssid) => ssid.name)} onClose={() => setEditing(null)} />}
       {deleting && <DeleteDialog ssid={deleting} onClose={() => setDeleting(null)} />}
     </Page>
@@ -184,7 +200,13 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
               placeholder={needsPassword(form.opmode) ? (ssid?.hasPassword ? '••••••••' : '') : 'Not used'}
               className="pr-8"
             />
-            <IconButton label={showPassword ? 'Hide password' : 'Show password'} size="md" onClick={() => setShowPassword((value) => !value)} className="absolute right-0.5 top-0.5" disabled={!needsPassword(form.opmode)}>
+            <IconButton
+              label={showPassword ? 'Hide password' : 'Show password'}
+              size="md"
+              onClick={() => setShowPassword((value) => !value)}
+              className="absolute right-0.5 top-0.5"
+              disabled={!needsPassword(form.opmode)}
+            >
               {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
             </IconButton>
           </div>
@@ -224,14 +246,29 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
                 { value: 'untagged', label: 'Untagged' },
               ]}
             />
-            <Input type="number" min={1} max={4094} inputMode="numeric" value={vlanMode === 'tagged' ? vlanText : ''} disabled={vlanMode === 'untagged'} onChange={(event) => setVlanText(event.target.value)} placeholder="ID" className="w-24" />
+            <Input
+              type="number"
+              min={1}
+              max={4094}
+              inputMode="numeric"
+              value={vlanMode === 'tagged' ? vlanText : ''}
+              disabled={vlanMode === 'untagged'}
+              onChange={(event) => setVlanText(event.target.value)}
+              placeholder="ID"
+              className="w-24"
+            />
           </div>
         </Field>
 
         <div className="space-y-1 sm:col-span-2">
           <Toggle checked={form.enabled} onChange={(value) => set('enabled', value)} label="Enabled" hint="Disabled networks keep their settings but stop broadcasting." />
           <Toggle checked={form.hidden} onChange={(value) => set('hidden', value)} label="Hide network name" hint="Clients have to enter the SSID manually." />
-          <Toggle checked={form.isolation} onChange={(value) => set('isolation', value)} label="Client isolation" hint="Clients on this network cannot talk to each other through the AP." />
+          <Toggle
+            checked={form.isolation}
+            onChange={(value) => set('isolation', value)}
+            label="Client isolation"
+            hint="Clients on this network cannot talk to each other through the AP."
+          />
         </div>
       </div>
 

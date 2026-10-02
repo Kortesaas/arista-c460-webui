@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 type DiagnosticInput struct {
 	Tool   string `json:"tool"`
 	Target string `json:"target"`
+	Port   int    `json:"port,omitempty"`
 }
 type DiagnosticResult struct {
 	Tool       string `json:"tool"`
@@ -27,13 +29,22 @@ type DiagnosticResult struct {
 	Success    bool   `json:"success"`
 	TimedOut   bool   `json:"timedOut"`
 	DurationMS int64  `json:"durationMs"`
+	Port       int    `json:"port,omitempty"`
 }
 
 func diagnosticArgs(v DiagnosticInput) ([]string, error) {
 	if !validHost(v.Target) {
 		return nil, errors.New("target must be a hostname or IP address")
 	}
+	if v.Tool != "tcp" && v.Port != 0 {
+		return nil, errors.New("port applies only to a TCP test")
+	}
 	switch v.Tool {
+	case "tcp":
+		if v.Port < 1 || v.Port > 65535 {
+			return nil, errors.New("TCP port must be 1–65535")
+		}
+		return nil, nil
 	case "ping":
 		applet := "ping"
 		if ip := net.ParseIP(v.Target); ip != nil && ip.To4() == nil {
@@ -45,7 +56,7 @@ func diagnosticArgs(v DiagnosticInput) ([]string, error) {
 	case "trace":
 		return []string{"traceroute", "-n", "-m", "8", "-q", "1", "-w", "1", v.Target}, nil
 	}
-	return nil, errors.New("choose ping, dns or trace")
+	return nil, errors.New("choose ping, dns, trace or tcp")
 }
 
 type cappedOutput struct {
@@ -84,6 +95,22 @@ func (a *API) diagnose(w http.ResponseWriter, r *http.Request) {
 	defer a.diagnosticMu.Unlock()
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
+	if input.Tool == "tcp" {
+		start := time.Now()
+		dialer := net.Dialer{Timeout: 5 * time.Second}
+		conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(input.Target, strconv.Itoa(input.Port)))
+		result := DiagnosticResult{Tool: input.Tool, Target: input.Target, Port: input.Port, Success: err == nil, DurationMS: time.Since(start).Milliseconds()}
+		if err == nil {
+			_ = conn.Close()
+			result.Output = fmt.Sprintf("Connected to %s on TCP port %d.", input.Target, input.Port)
+		} else {
+			result.Output = "Connection failed: " + err.Error()
+			var timeout net.Error
+			result.TimedOut = errors.As(err, &timeout) && timeout.Timeout()
+		}
+		reply(w, 200, result)
+		return
+	}
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "/bin/busybox", args...)
 	cmd.Env = cleanEnv()

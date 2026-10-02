@@ -202,6 +202,7 @@ export interface TimeSettings {
   running: boolean
 }
 export interface DiagnosticResult {
+  port?: number
   tool: string
   target: string
   output: string
@@ -217,4 +218,19 @@ export interface WirelessStatus {
 export interface NativeClient {
   interface: string
   values: Record<string, string>
+}
+
+export interface SsidFeatures {
+  rrm: boolean | null
+  load: boolean | null
+  interfaces: { interface: string; band: string; rrm: boolean | null; load: boolean | null; error?: string }[]
+}
+export interface LldpTiming {
+  interval: number
+  hold: number
+}
+export interface LldpState extends LldpTiming {
+  saved: LldpTiming | null
+  neighborError?: string
+  neighbors: { interface: string; name: string; description: string; chassisId: string; portId: string; portDescription: string; addresses: string[]; age: string; ttl: string }[]
 }
