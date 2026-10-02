@@ -60,7 +60,7 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
             { label: 'Band', value: client.band ? `${client.band} GHz` : '—' },
             { label: 'VLAN', value: client.vlan ?? 'Native / untagged' },
             { label: 'Signal', value: client.rssi === null ? '—' : `${client.rssi} dBm` },
-            { label: 'Spatial streams', value: client.streams ?? '—' },
+            { label: 'Spatial streams', value: client.streams && client.streams > 0 ? client.streams : '—' },
           ]}
         />
         <KeyValue
