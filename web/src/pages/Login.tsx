@@ -63,7 +63,7 @@ export function LoginPage() {
           </Button>
         </form>
         <p className="mt-4 text-center text-[11px] leading-4 text-faint">
-          ARRR-ISTA is a parody. Unofficial local web interface, not affiliated with or endorsed by Arista Networks.
+          Unofficial interface. Not affiliated with Arista Networks.
         </p>
       </div>
       </div>

@@ -1,6 +1,17 @@
 import { WifiOff } from 'lucide-react'
 import { useApp } from '@/stores/app'
-import { Button, EmptyState, Spinner } from '@/ui/kit'
+import { Brand } from '@/ui/Brand'
+import { Button, EmptyState } from '@/ui/kit'
+
+export function PirateLoading() {
+  return (
+    <div className="pirate-loading" role="status" aria-label="Loading the access point" aria-live="polite">
+      <span aria-hidden="true">
+        <Brand variant="hat" height={40} className="pirate-loading-hat" />
+      </span>
+    </div>
+  )
+}
 
 /** Shown until the first state arrives, or when the AP service cannot be reached. */
 export function LoadingState() {
@@ -16,10 +27,5 @@ export function LoadingState() {
         />
       </div>
     )
-  return (
-    <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-3 text-muted">
-      <Spinner size={20} className="text-accent" />
-      <p className="text-[13px]">Reading the access point…</p>
-    </div>
-  )
+  return <PirateLoading />
 }

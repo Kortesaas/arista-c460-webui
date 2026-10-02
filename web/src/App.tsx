@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from '@/app/AppShell'
 import { Toasts } from '@/components/Toasts'
+import { PirateLoading } from '@/components/Loading'
 import { useApp } from '@/stores/app'
-import { Spinner } from '@/ui/kit'
 import { LoginPage } from '@/pages/Login'
 import { OverviewPage } from '@/pages/Overview'
 import { WirelessPage } from '@/pages/Wireless'
@@ -17,12 +17,7 @@ export function App() {
   const auth = useApp((store) => store.auth)
   useEffect(() => init(), [init])
 
-  if (auth === 'unknown')
-    return (
-      <div className="grid h-full place-items-center text-muted">
-        <Spinner size={20} className="text-accent" />
-      </div>
-    )
+  if (auth === 'unknown') return <PirateLoading />
 
   return (
     <>

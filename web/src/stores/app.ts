@@ -68,6 +68,12 @@ export const useApp = create<AppStore>((set, get) => ({
   refresh: async () => {
     try {
       const state = await api.state()
+      // During boot, the poller returns null collections until its first successful read.
+      // Keep the loading screen (or the last good snapshot) instead of rendering that response.
+      if (![state.radios, state.ssids, state.clients, state.neighbors, state.interfaces].every(Array.isArray)) {
+        set({ connection: get().state ? 'reconnecting' : 'connecting', error: state.error ?? null })
+        return
+      }
       set({ state, connection: 'live', error: state.error ?? null })
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {

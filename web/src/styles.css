@@ -147,3 +147,32 @@
 .spin {
   animation: spin 1s linear infinite;
 }
+
+/* Visible before React starts, while checking the session and awaiting AP data. */
+.pirate-loading {
+  display: flex;
+  height: 100%;
+  min-height: 40vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.pirate-loading-hat {
+  color: var(--brand);
+  /* Matching nonzero speeds at both ends keep each turn flowing into the next. */
+  animation: spin 2s cubic-bezier(0.4, 0.2, 0.6, 0.8) infinite;
+}
+.pirate-loading-art {
+  display: inline-block;
+  width: 66px;
+  height: 40px;
+  flex-shrink: 0;
+  background: currentColor;
+  mask: url('./assets/brand-hat.png') center / contain no-repeat;
+  -webkit-mask: url('./assets/brand-hat.png') center / contain no-repeat;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pirate-loading-hat {
+    animation: none;
+  }
+}
