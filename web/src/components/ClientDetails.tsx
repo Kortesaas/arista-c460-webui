@@ -55,6 +55,7 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
         <KeyValue
           items={[
             { label: 'IPv4', value: client.ipv4 || '—', mono: true },
+            { label: 'Address source', value: !client.ipv4 ? 'Unknown' : client.ipv4Source === 'arp' ? 'AP ARP cache' : 'AP telemetry' },
             { label: 'IPv6', value: client.ipv6.join(', ') || '—', mono: true },
             { label: 'Band', value: client.band ? `${client.band} GHz` : '—' },
             { label: 'VLAN', value: client.vlan ?? 'Native / untagged' },

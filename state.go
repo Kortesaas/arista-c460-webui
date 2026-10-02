@@ -80,6 +80,7 @@ type Client struct {
 	Band           string     `json:"band"`
 	VLAN           *int       `json:"vlan"`
 	IPv4           string     `json:"ipv4"`
+	IPv4Source     string     `json:"ipv4Source,omitempty"`
 	IPv6           []string   `json:"ipv6"`
 	Hostname       string     `json:"hostname"`
 	OS             string     `json:"os"`
@@ -190,6 +191,7 @@ func (p *Poller) poll(ctx context.Context) {
 	}
 	p.raw = tree
 	st := build(tree)
+	supplementClientAddresses(st.Clients, readARPAddresses())
 	st.Device = device
 	st.Device.Hostname = p.gnmi.host
 	if v, ok := dig(tree, "system", "ssh-server", "config", "enable").(bool); ok {

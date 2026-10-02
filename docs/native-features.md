@@ -8,8 +8,10 @@ Root access provides additional interfaces beyond this firmware's OpenConfig con
 | Ping and route tracing | BusyBox, separate argument array | Diagnostics → Network tests | Loopback ping and traceroute succeeded on the AP. Targets with shell syntax rejected. |
 | DNS lookup | BusyBox nslookup, management DNS | Diagnostics → Network tests | Actual AP result displayed correctly. DNS lookup failed in the router-free test environment; successful upstream resolution remains dependent on a reachable DNS server. |
 | Live BSS status | Hostapd Unix datagram control sockets | Diagnostics → Live wireless interfaces | All 15 interfaces returned ENABLED, BSSID, SSID, frequency, beacon and DTIM values. Actual DTIM was 2, while a native profile file declared 1: operating-state reads matter. |
-| Client association details | Hostapd `STA <mac>` | Clients → View | Socket protocol and allowlisted properties tested. AP rejected absent clients. No associated station was present for live client-detail validation during this run. |
-| Reconnect client | Hostapd `DEAUTHENTICATE <mac> reason=2` | Clients → View → Reconnect client | Backend tested against a local protocol fixture for success, failure and absent stations; confirmation and success UI tested with a simulated client. Live disconnect/reassociation still requires a connected test station. |
+| Client association details | Hostapd `STA <mac>` | Clients → View | Socket protocol and allowlisted properties tested. AP rejected absent clients. A test phone on the management SSID later returned live association flags, interface, traffic counters and connected time. |
+| Reconnect client | Hostapd `DEAUTHENTICATE <mac> reason=2` | Clients → View → Reconnect client | Backend tested against a local protocol fixture for success, failure and absent stations; confirmation and success UI tested with a simulated client. Later verified on the real test phone: the AP accepted the action, the station rejoined with AUTHORISED flags within one second, its connected-time counter reset, and its static address remained pingable. |
+
+| Static client IPv4 discovery | Complete entries in `/proc/net/arp` | Clients table and details, with address source | The AP pinged a manually configured test phone with 0% loss; its ARP entry supplied the address missing from OpenConfig. Incomplete and ambiguous entries are ignored. |
 
 ## Persistence and limits
 

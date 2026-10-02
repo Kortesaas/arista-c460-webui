@@ -78,6 +78,7 @@ export interface Client {
   band: Band | ''
   vlan: number | null
   ipv4: string
+  ipv4Source?: 'arp'
   ipv6: string[]
   hostname: string
   os: string

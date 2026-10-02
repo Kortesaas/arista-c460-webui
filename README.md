@@ -11,7 +11,7 @@ The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance tha
 - **Overview:** health, clients, radios, uplink, temperature, memory, flash usage.
 - **Wireless networks (read/write):** create, edit and delete SSIDs: name, security (WPA3 Personal, WPA2 Personal, Enhanced Open, Open), password, bands (2.4/5/6 GHz), VLAN tag or untagged, client isolation, hidden, enabled.
 - **Radios (read/write):** channel (regulatory list, DFS marked), channel width, transmit power, automatic channel/power, enable/disable. It shows the effective EIRP, channel utilisation and noise floor.
-- **Clients:** signal, SNR, rates, traffic, IPv4/IPv6 and hostname, plus live association details and a confirmed reconnect action. Reconnect briefly disconnects the station; it does not ban it.
+- **Clients:** signal, SNR, rates, traffic, IPv4/IPv6 and hostname (including static IPv4 learned through ARP), plus live association details and a confirmed reconnect action. Reconnect briefly disconnects the station; it does not ban it.
 - **RF scan:** neighbouring access points with channel occupancy.
 - **Management network (read/write):** static IPv4 or DHCP client, subnet mask, gateway, up to three DNS servers, DNS search domain, and native/untagged or tagged management VLAN. Saved changes apply after an AP restart; the UI shows the destination address.
 - **Time synchronisation (read/write):** primary and secondary NTP servers, service and clock-sync status. Saves use the native encrypted configuration, with local desired settings restored when the WebUI service starts.

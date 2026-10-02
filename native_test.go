@@ -242,3 +242,24 @@ func TestNativeClientActions(t *testing.T) {
 		})
 	}
 }
+
+func TestStaticClientARPDiscovery(t *testing.T) {
+	arp := parseARPAddresses(`IP address       HW type     Flags       HW address            Mask     Device
+192.168.99.200   0x1         0x2         42:1d:4a:30:4a:01     *        br0
+192.168.99.1     0x1         0x0         00:00:00:00:00:00     *        br0
+192.168.10.2     0x1         0x2         02:11:22:33:44:55     *        br0.10
+192.168.20.2     0x1         0x2         02:11:22:33:44:55     *        br0.20
+bad-address     0x1         0x2         02:11:22:33:44:66     *        br0
+`)
+	if len(arp) != 1 || arp["42:1d:4a:30:4a:01"] != "192.168.99.200" {
+		t.Fatal("invalid or ambiguous ARP entry included", arp)
+	}
+	clients := []Client{{MAC: "42:1D:4A:30:4A:01"}, {MAC: "42:1d:4a:30:4a:01", IPv4: "192.168.99.201"}, {MAC: "02:11:22:33:44:55"}}
+	supplementClientAddresses(clients, arp)
+	if clients[0].IPv4 != "192.168.99.200" || clients[0].IPv4Source != "arp" {
+		t.Fatal("static address missing", clients)
+	}
+	if clients[1].IPv4 != "192.168.99.201" || clients[1].IPv4Source != "" || clients[2].IPv4 != "" {
+		t.Fatal("overwrote telemetry or guessed an address", clients)
+	}
+}
