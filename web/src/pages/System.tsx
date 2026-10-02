@@ -2,89 +2,87 @@ import { useState } from 'react'
 import { KeyRound } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
-import { DisplaySettingsPanel, HardwarePanel, MaintenancePanel, ManagementPanel } from '@/components/SystemSettings'
+import { DisplaySettingsPanel, MaintenancePanel } from '@/components/SystemSettings'
 import { RefreshPanel } from '@/components/RefreshSettings'
-import { LldpPanel } from '@/components/LldpSettings'
-import { TimePanel } from '@/components/TimeSettings'
-import { Dot } from '@/components/status'
+import { Meter } from '@/components/status'
+import { cn } from '@/ui/cn'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
-import { Button, Field, Input, KeyValue, Panel, Spinner } from '@/ui/kit'
+import { Button, Field, HelpTip, Input, Panel, Spinner } from '@/ui/kit'
 import { formatBytes, formatDuration } from '@/utils/format'
 
 export function SystemPage() {
   const state = useApp((store) => store.state)
   if (!state) return <LoadingState />
-  const { device, interfaces } = state
+  const { device, hardware } = state
+  const memUsed = device.memTotal ? ((device.memTotal - device.memAvailable) / device.memTotal) * 100 : null
+  const flashUsed = device.storageTotal ? ((device.storageTotal - device.storageFree) / device.storageTotal) * 100 : null
+  const facts: { label: string; value: string; mono?: boolean; tone?: 'warn' | 'danger' }[] = [
+    { label: 'Model', value: device.model },
+    { label: 'Firmware', value: device.firmware || '—', mono: true },
+    { label: 'Serial number', value: hardware?.serial || '—', mono: true },
+    { label: 'MAC address', value: device.mac, mono: true },
+    { label: 'Uptime', value: formatDuration(device.uptimeSeconds) },
+    {
+      label: 'Temperature',
+      value: device.temperatureC === null ? '—' : `${device.temperatureC.toFixed(0)} °C`,
+      tone: device.temperatureC !== null && device.temperatureC > 85 ? 'danger' : device.temperatureC !== null && device.temperatureC > 75 ? 'warn' : undefined,
+    },
+    { label: 'Power source', value: hardware?.powerSource || '—' },
+    { label: '6 GHz power class', value: hardware?.radioPower || '—' },
+  ]
   return (
-    <Page title="System" description="Management network, device settings and maintenance.">
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className="space-y-3">
-          <ManagementPanel state={state} />
-          <TimePanel />
-          <RefreshPanel />
-          <DisplaySettingsPanel state={state} />
-          <Panel title="Device">
-            <KeyValue
-              items={[
-                { label: 'Model', value: device.model },
-                { label: 'Firmware', value: device.firmware || '—' },
-                { label: 'Hostname', value: device.hostname, mono: true },
-                { label: 'MAC address', value: device.mac, mono: true },
-                { label: 'Management IP', value: device.mgmtIp ? `${device.mgmtIp}/${device.mgmtPrefix}` : '—', mono: true },
-                { label: 'Default gateway', value: device.gateway || '—', mono: true },
-                { label: 'Regulatory country', value: device.country || '—' },
-                { label: 'Uptime', value: formatDuration(device.uptimeSeconds) },
-                { label: 'Load average', value: device.load.join(' / ') || '—' },
-                { label: 'Memory', value: `${formatBytes(device.memAvailable)} free of ${formatBytes(device.memTotal)}` },
-                { label: 'Flash storage', value: `${formatBytes(device.storageFree)} free of ${formatBytes(device.storageTotal)}` },
-                { label: 'Temperature', value: device.temperatureC === null ? '—' : `${device.temperatureC.toFixed(1)} °C` },
-                { label: 'SSH', value: device.sshEnabled ? 'enabled' : 'disabled' },
-              ]}
-            />
-          </Panel>
-          <HardwarePanel state={state} />
-        </div>
+    <Page title="System" description="Device information, maintenance and access to this interface.">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {facts.map((fact) => (
+          <div key={fact.label} className="min-w-0 rounded-lg border border-line bg-surface px-3 py-2.5">
+            <p className="truncate text-[11px] text-faint">{fact.label}</p>
+            <p className={cn('mt-0.5 truncate text-[14px] font-semibold', fact.mono && 'mono', fact.tone === 'danger' ? 'text-danger' : fact.tone === 'warn' ? 'text-warn' : 'text-ink')} title={fact.value}>
+              {fact.value}
+            </p>
+          </div>
+        ))}
+      </div>
 
+      <Panel title="Resources" className="mt-3">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <Meter value={memUsed} label="Memory" warnAt={75} dangerAt={90} />
+            <p className="tabular mt-1 text-[11px] text-faint">
+              {formatBytes(device.memTotal - device.memAvailable)} of {formatBytes(device.memTotal)}
+            </p>
+          </div>
+          <div>
+            <Meter value={flashUsed} label="Flash storage" warnAt={75} dangerAt={90} />
+            <p className="tabular mt-1 text-[11px] text-faint">{formatBytes(device.storageFree)} free</p>
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between text-[11px]">
+              <span className="flex items-center gap-1 text-faint">
+                CPU load
+                <HelpTip label="CPU load">Average number of busy processes over 1, 5 and 15 minutes. The AP has four cores, so values below 4 mean it is not overloaded.</HelpTip>
+              </span>
+              <span className="tabular text-muted">{device.load.join(' · ') || '—'}</span>
+            </div>
+            <Meter value={device.load[0] ? Math.min(100, (Number(device.load[0]) / 4) * 100) : null} warnAt={60} dangerAt={90} />
+          </div>
+        </div>
+      </Panel>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <div className="space-y-3">
-          <Panel title="Ethernet ports" bodyClassName="p-0">
-            <table className="w-full text-left text-[12px]">
-              <thead className="border-b border-line text-2xs font-semibold uppercase tracking-wider text-faint">
-                <tr>
-                  <th className="px-3 py-2">Port</th>
-                  <th className="px-3 py-2">Link</th>
-                  <th className="px-3 py-2 text-right">Received</th>
-                  <th className="px-3 py-2 text-right">Sent</th>
-                  <th className="px-3 py-2 text-right">Errors</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {interfaces.map((iface) => (
-                  <tr key={iface.name}>
-                    <td className="mono px-3 py-2 text-ink">{iface.name}</td>
-                    <td className="px-3 py-2">
-                      <span className="flex items-center gap-1.5 text-muted">
-                        <Dot tone={iface.up ? 'ok' : 'danger'} />
-                        {iface.up ? `${iface.speed} ${iface.duplex.toLowerCase()}` : 'no link'}
-                      </span>
-                    </td>
-                    <td className="tabular px-3 py-2 text-right text-muted">{formatBytes(iface.inOctets)}</td>
-                    <td className="tabular px-3 py-2 text-right text-muted">{formatBytes(iface.outOctets)}</td>
-                    <td className="tabular px-3 py-2 text-right text-muted">{iface.inErrors + iface.outErrors}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Panel>
-          <LldpPanel />
           <MaintenancePanel state={state} />
           <PasswordPanel />
+        </div>
+        <div className="space-y-3">
+          <DisplaySettingsPanel state={state} />
+          <RefreshPanel />
           <Panel title="About">
             <p className="text-[12px] leading-5 text-muted">
-              Local web interface for the C-460 access point, version <span className="mono text-ink">{device.uiVersion}</span>. Settings are managed locally through the AP’s
-              OpenConfig agent and native configuration. No controller or cloud service is involved.
+              ARRR-ISTA C460 web interface <span className="mono text-ink">{device.uiVersion}</span>. Runs on the access point and manages it through the AP’s own
+              configuration agent; no controller or cloud service is involved.
             </p>
-            <p className="mt-2 text-[11px] leading-4 text-faint">Unofficial project, not affiliated with or endorsed by Arista Networks. Use at your own risk.</p>
+            <p className="mt-2 text-[11px] leading-4 text-faint">ARRR-ISTA is a parody. Unofficial project, not affiliated with or endorsed by Arista Networks.</p>
           </Panel>
         </div>
       </div>

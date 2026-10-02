@@ -27,6 +27,7 @@ export function LldpPanel() {
   return (
     <Panel
       title="Switch discovery · LLDP"
+      help="LLDP shows which switch and port the AP is plugged into. The switch must have LLDP enabled. Saved timing is restored when the AP starts."
       actions={
         <>
           <Button size="sm" disabled={loading} aria-label="Refresh LLDP" onClick={() => void load()}>
@@ -84,7 +85,6 @@ export function LldpPanel() {
               </div>
             )}
           </div>
-          <p className="mt-3 text-[11px] leading-4 text-faint">LLDP identifies the neighbouring switch and port. Saved timing is restored when the local service starts.</p>
         </>
       )}
       {editing && settings && (

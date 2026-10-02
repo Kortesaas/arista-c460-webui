@@ -91,7 +91,7 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
         <p className="mt-3 text-[12px] text-muted">Reading live client details…</p>
       ) : null}
       {confirm && (
-        <div className="mt-4 rounded border border-warn/25 bg-warn-soft p-3 text-[12px] leading-5 text-warn">
+        <div className="mt-4 rounded border border-warn bg-warn-soft p-3 text-[12px] leading-5 text-warn">
           Disconnect this client briefly so it can negotiate a new connection? Active calls or transfers may be interrupted. If this is your device, the WebUI may disconnect too.
         </div>
       )}

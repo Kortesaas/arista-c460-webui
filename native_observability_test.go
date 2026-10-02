@@ -136,12 +136,12 @@ func TestBridgeMembershipAndNetworkMapping(t *testing.T) {
 	}
 	fixtureFile(t, filepath.Join(root, "br0.10/flags"), "0x1003")
 	fixtureFile(t, filepath.Join(root, "ath01/address"), "aa:bb:cc:dd:ee:ff\n")
-	state := APState{SSIDs: []SSID{{Name: "FOH-CONTROL", BSSIDs: []BSSID{{BSSID: "AA:BB:CC:DD:EE:FF"}}}}}
+	state := APState{SSIDs: []SSID{{Name: "Office", BSSIDs: []BSSID{{BSSID: "AA:BB:CC:DD:EE:FF"}}}}}
 	bridges := collectBridges(root, vlans, state, map[string][]string{"br0.10": {"192.168.10.40/24"}})
-	if len(bridges) != 1 || bridges[0].VLAN == nil || *bridges[0].VLAN != 10 || !bridges[0].Up || !reflect.DeepEqual(bridges[0].Networks, []string{"FOH-CONTROL"}) || len(bridges[0].Addresses) != 1 {
+	if len(bridges) != 1 || bridges[0].VLAN == nil || *bridges[0].VLAN != 10 || !bridges[0].Up || !reflect.DeepEqual(bridges[0].Networks, []string{"Office"}) || len(bridges[0].Addresses) != 1 {
 		t.Fatal(bridges)
 	}
-	if interfaceNetworks(root, state)["ath01"] != "FOH-CONTROL" {
+	if interfaceNetworks(root, state)["ath01"] != "Office" {
 		t.Fatal("event interface mapping failed")
 	}
 }
@@ -152,9 +152,9 @@ func TestWirelessEventsAllowlistAndBoundedHistory(t *testing.T) {
 		"2026.10.03 00:16:23: ath23: WPA: password=do-not-export\n" +
 		"2026.10.03 00:16:24: ath23: AP-STA-CONNECTED-SECRET password=do-not-export\n" +
 		"ath23: DFS-RADAR-DETECTED freq=5500\n"
-	events := parseWirelessEvents(raw, map[string]string{"ath23": "FOH-MGMT"})
+	events := parseWirelessEvents(raw, map[string]string{"ath23": "Guest"})
 	encoded, _ := json.Marshal(events)
-	if len(events) != 3 || events[0].Client != "AA:BB:CC:DD:EE:FF" || events[0].Network != "FOH-MGMT" || events[1].Frequency != "5975" || events[2].Tone != "warn" || strings.Contains(string(encoded), "do-not-export") {
+	if len(events) != 3 || events[0].Client != "AA:BB:CC:DD:EE:FF" || events[0].Network != "Guest" || events[1].Frequency != "5975" || events[2].Tone != "warn" || strings.Contains(string(encoded), "do-not-export") {
 		t.Fatal(string(encoded))
 	}
 	path := filepath.Join(t.TempDir(), "hostapd.log")

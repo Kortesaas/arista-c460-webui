@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
-import { NetworkPathsPanel, WirelessEventsPanel } from '@/components/NetworkDiagnostics'
+import { NetworkPathsPanel } from '@/components/NetworkDiagnostics'
 import { useEffect, useState } from 'react'
 import { Activity, Play, RefreshCw } from 'lucide-react'
 import { Page } from '@/app/Page'
@@ -10,12 +10,12 @@ import { Badge, Button, EmptyState, Field, Input, Panel, Select, Spinner, Segmen
 
 export function DiagnosticsPage() {
   const [params, setParams] = useSearchParams()
-  const views = ['connectivity', 'paths', 'wireless', 'events'] as const
+  const views = ['connectivity', 'paths', 'wireless'] as const
   const view = views.includes(params.get('view') as (typeof views)[number]) ? params.get('view')! : 'connectivity'
   return (
     <Page
       title="Diagnostics"
-      description="Test connections, inspect VLAN paths and review recent wireless events."
+      description="Test connections from the AP and inspect its VLAN paths and wireless interfaces."
       actions={
         <Segmented
           value={view}
@@ -28,7 +28,6 @@ export function DiagnosticsPage() {
             { value: 'connectivity', label: 'Connectivity' },
             { value: 'paths', label: 'Network paths' },
             { value: 'wireless', label: 'Wireless' },
-            { value: 'events', label: 'Events' },
           ]}
         />
       }
@@ -36,7 +35,6 @@ export function DiagnosticsPage() {
       {view === 'connectivity' && <ConnectivityPanel />}
       {view === 'paths' && <NetworkPathsPanel />}
       {view === 'wireless' && <WirelessStatusPanel />}
-      {view === 'events' && <WirelessEventsPanel />}
     </Page>
   )
 }
@@ -85,7 +83,7 @@ function ConnectivityPanel() {
               maxLength={253}
               autoCapitalize="none"
               spellCheck={false}
-              placeholder={tool === 'dns' ? 'aboutus-net.intern' : gateway || 'Hostname or IP address'}
+              placeholder={tool === 'dns' ? 'example.com' : gateway || 'Hostname or IP address'}
               disabled={busy}
               value={target}
               onChange={(e) => setTarget(e.target.value)}

@@ -26,7 +26,7 @@ export function RefreshPanel() {
     }
   }
   return (
-    <Panel title="Live updates">
+    <Panel title="Live updates" help="How often the AP is sampled. All open browsers share the same samples, and updates pause in background tabs. Changing it does not interrupt Wi-Fi.">
       <div className="flex items-end gap-2">
         <Field label="AP data update interval" className="min-w-0 flex-1">
           <Select value={seconds} disabled={busy} onChange={(e) => setSeconds(Number(e.target.value))}>
@@ -44,14 +44,7 @@ export function RefreshPanel() {
           {busy ? <Spinner size={13} /> : <Save size={13} />} Save
         </Button>
       </div>
-      <p className="mt-3 text-[11px] leading-4 text-faint">
-        The browser follows this AP sampling interval and pauses in background tabs. Slow AP reads can take longer. All browsers share the same AP samples.
-      </p>
-      <p className={`mt-2 text-[11px] leading-4 ${seconds < 5 ? 'text-warn' : 'text-faint'}`}>
-        {seconds < 5
-          ? 'Fast AP sampling increases CPU use. Use it when watching a change, then return to five seconds.'
-          : 'Five seconds keeps the AP workload low. Saving this setting does not interrupt Wi-Fi.'}
-      </p>
+      {seconds < 5 && <p className="mt-2 text-[11px] leading-4 text-warn">Fast sampling increases AP CPU load. Return to five seconds when done.</p>}
     </Panel>
   )
 }

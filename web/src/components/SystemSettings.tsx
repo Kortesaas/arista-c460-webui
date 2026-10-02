@@ -3,7 +3,7 @@ import { Lightbulb, Pencil, Plus, Power, Save, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
 import type { ApState, Management, ManagementInput, TrustCheck } from '@/types'
-import { Badge, Button, Dialog, DialogActions, Field, Input, KeyValue, Panel, Select, Spinner } from '@/ui/kit'
+import { Badge, Button, Dialog, DialogActions, Field, HelpTip, Input, KeyValue, Panel, Select, Spinner } from '@/ui/kit'
 
 function useSystemAction() {
   const [busy, setBusy] = useState(false)
@@ -58,7 +58,7 @@ export function ManagementPanel({ state }: { state: ApState }) {
             ]}
           />
           {(saved || m.pendingReboot) && (
-            <div className="mt-3 rounded border border-warn/25 bg-warn-soft p-2 text-[12px] text-warn">
+            <div className="mt-3 rounded border border-warn bg-warn-soft p-2 text-[12px] text-warn">
               Saved network settings need an AP restart.
               {(saved?.mode === 'static' ? saved.ipv4 : !saved && m.mode === 'static' ? m.ipv4 : '') && (
                 <p className="mt-1">
@@ -168,7 +168,7 @@ function ManagementDialog({ management: m, onClose, onSaved }: { management: Man
               <option value="dhcp">Automatic (DHCP client)</option>
             </Select>
           </Field>
-          <Field label="Management VLAN" hint="Use native / untagged unless the switch expects tagged AP management traffic.">
+          <Field label="Management VLAN" help="Keep native / untagged unless your switch port sends the AP's management traffic tagged in a specific VLAN.">
             <div className="flex gap-2">
               <Select
                 aria-label="Management VLAN mode"
@@ -194,7 +194,7 @@ function ManagementDialog({ management: m, onClose, onSaved }: { management: Man
               <Field label="Gateway IP">
                 <Input value={form.gateway} onChange={(e) => update('gateway', e.target.value.trim())} />
               </Field>
-              <Field label="DNS search domain" hint="Optional, for example aboutus.intern.">
+              <Field label="DNS search domain" hint="Optional, e.g. example.lan">
                 <Input value={form.dnsSearch} onChange={(e) => update('dnsSearch', e.target.value.trim())} />
               </Field>
               {dns.map((value, index) => (
@@ -341,17 +341,20 @@ export function MaintenancePanel({ state }: { state: ApState }) {
     <Panel title="Access and maintenance">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[13px] text-ink">
-            AP SSH access <Badge tone={state.device.sshEnabled ? 'ok' : 'neutral'}>{state.device.sshEnabled ? 'Enabled' : 'Disabled'}</Badge>
+          <p className="flex items-center gap-1.5 text-[13px] text-ink">
+            SSH access <Badge tone={state.device.sshEnabled ? 'ok' : 'neutral'}>{state.device.sshEnabled ? 'Enabled' : 'Disabled'}</Badge>
+            <HelpTip label="SSH access">Command-line access to the AP for administration and recovery. Disabling it also closes open SSH sessions.</HelpTip>
           </p>
-          <p className="mt-1 text-[11px] text-faint">Applies to the AP’s SSH service.</p>
         </div>
         <Button disabled={busy} onClick={() => setDialog('ssh')}>
           {state.device.sshEnabled ? 'Disable SSH' : 'Enable SSH'}
         </Button>
       </div>
       <div className="mt-4 border-t border-line pt-3">
-        <p className="mb-2 text-[13px] text-ink">Locate this AP</p>
+        <p className="mb-2 flex items-center gap-1.5 text-[13px] text-ink">
+          Locate this AP
+          <HelpTip label="Locate">Blinks the AP's LEDs so you can find it on the ceiling or in a rack.</HelpTip>
+        </p>
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Blink duration">
             <Select value={minutes} onChange={(e) => setMinutes(e.target.value)}>
@@ -372,7 +375,12 @@ export function MaintenancePanel({ state }: { state: ApState }) {
         </div>
       </div>
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-3">
-        <p className="text-[12px] text-muted">Restart to apply saved management settings.</p>
+        <p className="flex items-center gap-1.5 text-[13px] text-ink">
+          Restart access point
+          <HelpTip label="Restart">
+            Applies saved management network settings. Before restarting, the AP's boot safety check runs; the restart is refused if the firmware would erase local changes.
+          </HelpTip>
+        </p>
         <Button disabled={busy} onClick={() => setDialog('reboot')}>
           <Power size={13} />
           Restart AP

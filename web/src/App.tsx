@@ -12,6 +12,8 @@ import { ClientsPage } from '@/pages/Clients'
 import { ScanPage } from '@/pages/Scan'
 import { DiagnosticsPage } from '@/pages/Diagnostics'
 import { SystemPage } from '@/pages/System'
+import { NetworkPage } from '@/pages/Network'
+import { EventsPage } from '@/pages/Events'
 
 export function App() {
   const init = useApp((store) => store.init)
@@ -34,6 +36,8 @@ export function App() {
             <Route path="/clients" element={<ClientsPage />} />
             <Route path="/scan" element={<ScanPage />} />
             <Route path="/diagnostics" element={<DiagnosticsPage />} />
+            <Route path="/network" element={<NetworkPage />} />
+            <Route path="/events" element={<EventsPage />} />
             <Route path="/system" element={<SystemPage />} />
             <Route path="*" element={<Navigate to="/overview" replace />} />
           </Routes>

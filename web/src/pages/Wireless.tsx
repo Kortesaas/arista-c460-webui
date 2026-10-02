@@ -26,7 +26,7 @@ export function WirelessPage() {
   return (
     <Page
       title="Wireless networks"
-      description="SSIDs broadcast by this access point. Each network can be mapped to a VLAN on the uplink or stay untagged on the management network. DHCP comes from your router, not the AP."
+      description="Networks broadcast by this access point. Each one can use its own VLAN; addresses come from your router's DHCP, not the AP."
       actions={
         <Button variant="primary" onClick={() => setEditing('new')}>
           <Plus size={14} /> Add network

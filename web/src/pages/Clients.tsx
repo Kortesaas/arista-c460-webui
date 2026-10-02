@@ -28,11 +28,12 @@ export function ClientsPage() {
       description="Devices currently associated with this access point."
       actions={
         <>
-          <div className="relative">
+          <div className="relative w-56">
             <Search size={13} className="pointer-events-none absolute left-2 top-2.5 text-faint" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="MAC, IP, hostname…" className="w-56 pl-7" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="MAC, IP, hostname…" className="pl-7" aria-label="Filter clients" />
           </div>
-          <Select value={ssid} onChange={(event) => setSsid(event.target.value)} className="w-40">
+          <div className="w-44">
+          <Select value={ssid} onChange={(event) => setSsid(event.target.value)} aria-label="Network">
             <option value="">All networks</option>
             {state.ssids.map((item) => (
               <option key={item.name} value={item.name}>
@@ -40,6 +41,7 @@ export function ClientsPage() {
               </option>
             ))}
           </Select>
+          </div>
         </>
       }
     >
@@ -71,12 +73,19 @@ export function ClientsPage() {
               {clients.map((client) => (
                 <tr key={`${client.ssid}-${client.mac}`} className="hover:bg-surface-2/50">
                   <td className="px-3 py-2">
-                    <p className="font-medium text-ink">{client.hostname || client.ipv4 || client.mac}</p>
-                    <p className="mono text-[11px] text-faint">
-                      {client.mac}
-                      {client.ipv4 && client.hostname ? ` · ${client.ipv4}` : ''}
-                      {client.os ? ` · ${client.os}` : ''}
-                    </p>
+                    {client.hostname || client.ipv4 ? (
+                      <>
+                        <p className="font-medium text-ink">{client.hostname || client.ipv4}</p>
+                        <p className="mono text-[11px] text-faint">
+                          {[client.mac, client.hostname ? client.ipv4 : '', client.os].filter(Boolean).join(' · ')}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mono font-medium text-ink">{client.mac}</p>
+                        <p className="text-[11px] text-faint">{client.os || 'No IP address seen yet'}</p>
+                      </>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1.5">

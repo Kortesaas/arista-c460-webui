@@ -38,6 +38,7 @@ export function TimePanel() {
   return (
     <Panel
       title="Time synchronisation"
+      help="An accurate clock keeps event times and logs correct. Changing servers restarts time synchronisation only, Wi-Fi keeps running."
       actions={
         <>
           <Button size="sm" disabled={loading} aria-label="Refresh time settings" onClick={() => void load()}>
@@ -68,7 +69,6 @@ export function TimePanel() {
               { label: 'NTP service', value: settings.running ? 'Running' : 'Stopped' },
             ]}
           />
-          <p className="mt-3 text-[11px] leading-4 text-faint">Saved on the AP. Changing servers restarts time synchronisation without restarting Wi-Fi.</p>
         </>
       )}
       {editing && settings && (

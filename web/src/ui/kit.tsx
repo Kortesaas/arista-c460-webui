@@ -4,13 +4,15 @@ import {
   useEffect,
   useId,
   useRef,
+  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
-import { X } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { CircleHelp, X } from 'lucide-react'
 import { cn } from '@/ui/cn'
 
 /* ------------------------------------------------------------------ button */
@@ -94,37 +96,48 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return <textarea rows={3} {...props} className={cn(fieldBase, 'py-1.5', className)} />
 }
 
-export function Field({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
+export function Field({ label, hint, help, children, className }: { label: string; hint?: string; help?: ReactNode; children: ReactNode; className?: string }) {
   const id = useId()
   const control = isValidElement<{ id?: string }>(children) && !children.props.id ? cloneElement(children, { id }) : children
   return (
     <div className={cn('min-w-0', className)}>
-      <label htmlFor={id} className="mb-1 block text-2xs font-semibold uppercase tracking-wider text-faint">
-        {label}
-      </label>
+      <div className="mb-1 flex items-center gap-1">
+        <label htmlFor={id} className="block text-2xs font-semibold uppercase tracking-wider text-faint">
+          {label}
+        </label>
+        {help && <HelpTip label={label}>{help}</HelpTip>}
+      </div>
       {control}
       {hint && <p className="mt-1 text-[11px] leading-4 text-faint">{hint}</p>}
     </div>
   )
 }
 
-export function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (value: boolean) => void; label: string; hint?: string }) {
+export function Toggle({ checked, onChange, label, hint, help }: { checked: boolean; onChange: (value: boolean) => void; label: string; hint?: string; help?: ReactNode }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-3 rounded px-1 py-1 text-left text-[13px] text-ink hover:bg-surface-2"
-    >
-      <span className="min-w-0">
-        <span className="block truncate">{label}</span>
+    <div className="flex w-full items-center gap-3 rounded px-1 py-1 text-[13px] text-ink hover:bg-surface-2">
+      <span className="min-w-0 flex-1 cursor-pointer" onClick={() => onChange(!checked)}>
+        <span className="flex items-center gap-1.5">
+          <span className="truncate">{label}</span>
+          {help && (
+            <span onClick={(event) => event.stopPropagation()}>
+              <HelpTip label={label}>{help}</HelpTip>
+            </span>
+          )}
+        </span>
         {hint && <span className="block text-[11px] leading-4 text-faint">{hint}</span>}
       </span>
-      <span className={cn('relative h-[18px] w-8 shrink-0 rounded-full transition-colors', checked ? 'bg-accent' : 'bg-surface-3')}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={cn('relative h-[18px] w-8 shrink-0 rounded-full transition-colors', checked ? 'bg-accent' : 'bg-surface-3')}
+      >
         <span className={cn('absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white transition-all', checked ? 'left-[16px]' : 'left-[2px]')} />
-      </span>
-    </button>
+      </button>
+    </div>
   )
 }
 
@@ -163,12 +176,14 @@ export function Segmented<T extends string | number>({
 
 export function Panel({
   title,
+  help,
   actions,
   children,
   className,
   bodyClassName,
 }: {
   title?: ReactNode
+  help?: ReactNode
   actions?: ReactNode
   children: ReactNode
   className?: string
@@ -178,7 +193,10 @@ export function Panel({
     <section className={cn('flex min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-surface', className)}>
       {(title || actions) && (
         <header className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-line px-3">
-          <h2 className="truncate text-[13px] font-semibold text-ink">{title}</h2>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <h2 className="truncate text-[13px] font-semibold text-ink">{title}</h2>
+            {help && <HelpTip label={typeof title === 'string' ? title : 'Help'}>{help}</HelpTip>}
+          </div>
           {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
         </header>
       )}
@@ -300,5 +318,70 @@ export function Spinner({ size = 12, className }: { size?: number; className?: s
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </svg>
+  )
+}
+
+/**
+ * A small question-mark that reveals an explanation on hover or keyboard focus.
+ * Rendered in a portal with fixed positioning, so panels and dialogs that clip
+ * their content cannot cut it off.
+ */
+export function HelpTip({ children, label = 'Help' }: { children: ReactNode; label?: string }) {
+  const id = useId()
+  const anchor = useRef<HTMLButtonElement>(null)
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  const show = () => {
+    const rect = anchor.current?.getBoundingClientRect()
+    if (!rect) return
+    const width = 272
+    setPosition({ top: rect.bottom + 6, left: Math.max(8, Math.min(rect.left - 8, window.innerWidth - width - 8)) })
+  }
+  const hide = () => setPosition(null)
+  useEffect(() => {
+    if (!position) return
+    const close = () => setPosition(null)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [position])
+  return (
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        aria-label={`About ${label}`}
+        aria-describedby={position ? id : undefined}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+        onClick={(event) => {
+          event.preventDefault()
+          if (position) hide()
+          else show()
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') hide()
+        }}
+        className="inline-grid h-4 w-4 shrink-0 place-items-center rounded-full align-middle text-faint transition-colors hover:text-accent-text focus:text-accent-text focus:outline-none"
+      >
+        <CircleHelp size={13} />
+      </button>
+      {position &&
+        createPortal(
+          <span
+            role="tooltip"
+            id={id}
+            style={{ top: position.top, left: position.left, width: 272 }}
+            className="pointer-events-none fixed z-[70] rounded-md border border-line bg-surface p-2.5 text-[12px] font-normal normal-case leading-5 tracking-normal text-muted shadow-pop"
+          >
+            {children}
+          </span>,
+          document.body,
+        )}
+    </>
   )
 }

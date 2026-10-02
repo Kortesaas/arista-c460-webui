@@ -1,3 +1,4 @@
+import { EventTimeline } from '@/components/Charts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, Search, Download } from 'lucide-react'
 import { api } from '@/api'
@@ -225,6 +226,7 @@ export function WirelessEventsPanel() {
   return (
     <Panel
       title="Recent wireless events"
+      help="The latest 150 events from the AP's logs, refreshed every five seconds while this page is open. Times use the AP's clock; network names follow the current interface mapping."
       actions={
         <>
           <Button size="sm" disabled={!rows.length} onClick={exportEvents}>
@@ -250,17 +252,19 @@ export function WirelessEventsPanel() {
             <option value="warnings">Radio warnings</option>
           </Select>
         </div>
-        <p className="mt-2 text-[11px] leading-4 text-faint">
-          Updates every five seconds while visible. Times follow the AP’s clock; network names reflect current interface mappings.
-        </p>
-        {data && data.clockSynced !== true && <p className="mt-1 text-[11px] text-warn">The AP clock is not confirmed synchronised. Event times may be inaccurate.</p>}
+        {data && data.clockSynced !== true && <p className="mt-2 text-[11px] text-warn">The AP clock is not synchronised, so event times may be off. Set an NTP server under Network.</p>}
+        {rows.length > 1 && (
+          <div className="mt-3">
+            <EventTimeline events={rows} />
+          </div>
+        )}
       </div>
       {(error || data?.error) && (
         <p role="alert" className="p-3 text-[12px] text-danger">
           {error || data?.error}
         </p>
       )}
-      <div className="max-h-[620px] overflow-auto">
+      <div className="max-h-[480px] overflow-auto">
         <table className="w-full min-w-[640px] text-left text-[12px]">
           <thead className="sticky top-0 border-b border-line bg-surface text-faint">
             <tr>

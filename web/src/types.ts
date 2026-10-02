@@ -120,6 +120,9 @@ export interface Interface {
   outErrors: number
   inDiscards: number
   outDiscards: number
+  /** Physical socket ETH 1/2 (0 when unknown); the firmware swaps eth0/eth1 so eth0 is always the uplink. */
+  port: number
+  role: 'uplink' | 'backup' | ''
 }
 
 export interface ApState {

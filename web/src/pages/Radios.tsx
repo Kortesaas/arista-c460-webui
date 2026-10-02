@@ -3,6 +3,7 @@ import { RotateCcw, Save } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
 import { BandChip, Meter } from '@/components/status'
+import { ChannelChart } from '@/components/Charts'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
 import type { Band, Radio, RadioInput } from '@/types'
@@ -17,7 +18,7 @@ export function RadiosPage() {
   return (
     <Page
       title="Radios"
-      description="Channel, width and transmit power per band. The AP caps power at the regulatory and hardware limit for the selected channel; the effective EIRP is shown after applying."
+      description="Channel, width and power for each band. Bars under each radio show how busy its channels are nearby."
     >
       <div className="grid gap-3 xl:grid-cols-3">
         {state.radios.map((radio) => (
@@ -34,6 +35,7 @@ function inputOf(radio: Radio): RadioInput {
 
 function RadioCard({ radio }: { radio: Radio }) {
   const change = useApp((store) => store.change)
+  const neighbors = useApp((store) => store.state?.neighbors) ?? []
   const [form, setForm] = useState<RadioInput>(() => inputOf(radio))
   const [busy, setBusy] = useState(false)
   const initial = inputOf(radio)
@@ -82,12 +84,27 @@ function RadioCard({ radio }: { radio: Radio }) {
           <Meter value={radio.rxUtilization} label="Receive" />
           <Meter value={radio.txUtilization} label="Transmit" />
         </div>
+        <div className="pt-1">
+          <p className="mb-1 flex items-center justify-between text-[11px] text-faint">
+            <span>Nearby networks per channel</span>
+            <span className="tabular">{radio.neighbors} heard</span>
+          </p>
+          <ChannelChart band={radio.band} neighbors={neighbors} ours={radio.channel} channels={radio.allowedChannels} height={44} compact />
+        </div>
       </div>
 
       <div className="space-y-3 border-t border-line pt-3">
-        <Toggle checked={form.enabled} onChange={(value) => set('enabled', value)} label="Radio enabled" hint="Turning a radio off stops every network on this band." />
+        <Toggle checked={form.enabled} onChange={(value) => set('enabled', value)} label="Radio enabled" help="Turning a radio off stops every wireless network on this band." />
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Channel" hint={isDfs(radio.band, form.channel) ? 'DFS: radar check before broadcasting' : undefined}>
+          <Field
+            label="Channel"
+            help={
+              <>
+                Channels marked DFS (5 GHz 52–144) must be checked for radar for about a minute before the radio starts, and the AP leaves the channel if radar
+                appears. Use the chart below to pick a quiet channel.
+              </>
+            }
+          >
             <Select value={form.channel} onChange={(event) => set('channel', Number(event.target.value))}>
               {channels.map((channel) => (
                 <option key={channel} value={channel}>
@@ -97,19 +114,22 @@ function RadioCard({ radio }: { radio: Radio }) {
               ))}
             </Select>
           </Field>
-          <Field label="Transmit power" hint={`Requested; limit ${radio.maxEirp ?? '—'} dBm EIRP`}>
+          <Field
+            label="Transmit power"
+            help={`The power you request. The AP limits it to the regulatory and hardware maximum for the channel (${radio.maxEirp ?? '—'} dBm EIRP here); the value actually used is shown as EIRP above.`}
+          >
             <div className="flex items-center gap-2">
               <input type="range" min={1} max={powerCeiling} value={form.power} onChange={(event) => set('power', Number(event.target.value))} className="min-w-0 flex-1 accent-[var(--accent)]" aria-label="Transmit power" />
               <span className="tabular w-14 text-right text-[12px] text-ink">{form.power} dBm</span>
             </div>
           </Field>
         </div>
-        <Field label="Channel width">
+        <Field label="Channel width" help="Wider channels are faster but overlap more neighbours. 20 MHz is most robust on 2.4 GHz; 40–80 MHz suits 5 GHz; 6 GHz can use up to 320 MHz.">
           <Segmented value={form.width} onChange={(value) => set('width', value)} options={WIDTHS[radio.band].map((width) => ({ value: width, label: `${width}` }))} className="w-full" />
         </Field>
         <div>
-          <Toggle checked={form.dca} onChange={(value) => set('dca', value)} label="Automatic channel" hint="Let the AP pick the channel (DCA)." />
-          <Toggle checked={form.dtp} onChange={(value) => set('dtp', value)} label="Automatic power" hint="Let the AP adjust transmit power (DTP)." />
+          <Toggle checked={form.dca} onChange={(value) => set('dca', value)} label="Automatic channel" help="Dynamic channel assignment (DCA): the AP moves to a quieter channel on its own." />
+          <Toggle checked={form.dtp} onChange={(value) => set('dtp', value)} label="Automatic power" help="Dynamic transmit power (DTP): the AP adjusts its power to the surroundings." />
         </div>
         <div className="flex justify-end gap-2">
           <Button disabled={!dirty || busy} onClick={() => setForm(initial)}>

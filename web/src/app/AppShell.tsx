@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Antenna, Activity, Gauge, LogOut, Menu, Monitor, Moon, PanelLeft, Radar, RefreshCw, Server, Sun, Users, Wifi } from 'lucide-react'
+import { Antenna, Activity, Cable, Gauge, History, LogOut, Menu, Monitor, Moon, PanelLeft, Radar, RefreshCw, Server, Sun, Users, Wifi } from 'lucide-react'
 import { cn } from '@/ui/cn'
 import { Brand } from '@/ui/Brand'
 import { Badge } from '@/ui/kit'
@@ -8,25 +8,37 @@ import { useApp, type Connection } from '@/stores/app'
 import { useThemeStore, type Theme } from '@/stores/theme'
 import { Age } from '@/components/status'
 
-const nav = [
-  { label: 'Overview', to: '/overview', icon: Gauge },
-  { label: 'Wireless networks', to: '/wireless', icon: Wifi },
-  { label: 'Radios', to: '/radios', icon: Antenna },
-  { label: 'Clients', to: '/clients', icon: Users, badge: 'clients' as const },
-  { label: 'RF scan', to: '/scan', icon: Radar },
-  { label: 'Diagnostics', to: '/diagnostics', icon: Activity },
-  { label: 'System', to: '/system', icon: Server },
+type NavItem = { label: string; to: string; icon: typeof Gauge; badge?: 'clients' }
+
+// Grouped by what the user is doing: watching, changing, or fixing the AP.
+const nav: { title: string | null; items: NavItem[] }[] = [
+  {
+    title: 'Monitor',
+    items: [
+      { label: 'Overview', to: '/overview', icon: Gauge },
+      { label: 'Clients', to: '/clients', icon: Users, badge: 'clients' },
+      { label: 'RF environment', to: '/scan', icon: Radar },
+      { label: 'Events', to: '/events', icon: History },
+    ],
+  },
+  {
+    title: 'Configure',
+    items: [
+      { label: 'Wireless networks', to: '/wireless', icon: Wifi },
+      { label: 'Radios', to: '/radios', icon: Antenna },
+      { label: 'Network', to: '/network', icon: Cable },
+    ],
+  },
+  {
+    title: 'Maintain',
+    items: [
+      { label: 'Diagnostics', to: '/diagnostics', icon: Activity },
+      { label: 'System', to: '/system', icon: Server },
+    ],
+  },
 ]
 
-const titles: [string, string][] = [
-  ['/overview', 'Overview'],
-  ['/wireless', 'Wireless networks'],
-  ['/radios', 'Radios'],
-  ['/clients', 'Clients'],
-  ['/scan', 'RF scan'],
-  ['/diagnostics', 'Diagnostics'],
-  ['/system', 'System'],
-]
+const titles: [string, string][] = nav.flatMap((group) => group.items.map((item): [string, string] => [item.to, item.label]))
 
 function ThemeToggle() {
   const { theme, setTheme } = useThemeStore()
@@ -161,16 +173,17 @@ export function AppShell({ children }: { children: ReactNode }) {
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className={cn('flex h-10 shrink-0 items-center gap-2 border-b border-line px-3 text-brand', collapsed && 'justify-center px-0')}>
-          {collapsed ? (
-            <Brand variant="hat" height={18} />
-          ) : (
-            <span className="truncate text-2xs font-semibold uppercase tracking-wider text-faint">{device?.model ?? 'C-460'} access point</span>
-          )}
-        </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-2" aria-label="Main">
-          {nav.map((item) => (
+          {nav.map((group) => (
+            <div key={group.title ?? 'root'} className="mb-1">
+              {group.title &&
+                (collapsed ? (
+                  <div className="mx-2 my-2 border-t border-line" />
+                ) : (
+                  <p className="px-2 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wider text-faint first:pt-1">{group.title}</p>
+                ))}
+          {group.items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -188,6 +201,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               {!collapsed && <span className="truncate">{item.label}</span>}
               {!collapsed && item.badge === 'clients' && clients > 0 && <span className="tabular ml-auto rounded-sm bg-surface-2 px-1.5 text-2xs font-bold text-muted">{clients}</span>}
             </NavLink>
+          ))}
+            </div>
           ))}
         </nav>
 
@@ -215,7 +230,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {state?.error && (
           <div className="shrink-0 border-b border-line bg-warn-soft px-3 py-1.5 text-[12px] leading-4 text-warn">{state.error} — showing the last known values.</div>
         )}
-        <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+        <main className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">{children}</main>
       </div>
       </div>
     </div>

@@ -122,6 +122,10 @@ type Interface struct {
 	OutErrors  float64 `json:"outErrors"`
 	InDiscard  float64 `json:"inDiscards"`
 	OutDiscard float64 `json:"outDiscards"`
+	// Port is the physical socket number (ETH 1/2, "LAN1/2" in the vendor CLI).
+	// The firmware swaps eth0/eth1 so that eth0 is always the active uplink.
+	Port int    `json:"port"`
+	Role string `json:"role"` // "uplink" or "backup"
 }
 
 // ------------------------------------------------------------------ poller
@@ -213,6 +217,7 @@ func (p *Poller) poll(ctx context.Context) {
 	st := build(tree)
 	supplementClientAddresses(st.Clients, readARPAddresses())
 	supplementEthernet(st.Interfaces, "/sys/class/net")
+	annotatePorts(st.Interfaces, "/sys/class/net")
 	st.Device = device
 	st.Device.Hostname = p.gnmi.host
 	if v, ok := dig(tree, "system", "ssh-server", "config", "enable").(bool); ok {

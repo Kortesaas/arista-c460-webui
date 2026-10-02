@@ -6,7 +6,8 @@ import { Age, BandChip, Dot, Meter, Stat, VlanChip } from '@/components/status'
 import { useApp } from '@/stores/app'
 import { cn } from '@/ui/cn'
 import { Badge, EmptyState, KeyValue, Panel } from '@/ui/kit'
-import { formatBytes, formatDuration, isDfs, opModeShort, plural } from '@/utils/format'
+import { PortCards, portLabel } from '@/components/Ports'
+import { formatDuration, isDfs, opModeShort, plural } from '@/utils/format'
 
 export function OverviewPage() {
   const state = useApp((store) => store.state)
@@ -42,7 +43,7 @@ export function OverviewPage() {
         <Stat
           label="Uplink"
           value={uplinks.length ? uplinks[0]!.speed || 'Up' : 'Down'}
-          detail={interfaces.map((iface) => `${iface.name} ${iface.up ? 'up' : 'down'}`).join(' · ')}
+          detail={interfaces.map((iface) => `${portLabel(iface)} ${iface.up ? 'up' : 'down'}`).join(' · ')}
           tone={uplinks.length ? 'ok' : 'danger'}
           icon={<Cable size={13} />}
         />
@@ -112,7 +113,7 @@ export function OverviewPage() {
                 {ssids.map((ssid) => (
                   <li key={ssid.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
                     <Dot tone={ssid.enabled ? 'ok' : 'neutral'} />
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
+                    <span className="min-w-0 flex-1 basis-[9rem] truncate text-[13px] font-medium text-ink">
                       {ssid.name}
                       {ssid.hidden && <span className="ml-1.5 text-2xs font-normal text-faint">hidden</span>}
                     </span>
@@ -132,48 +133,36 @@ export function OverviewPage() {
         </section>
 
         <div className="min-w-0 space-y-3">
-          <Panel title="Device">
+          <Panel
+            title="Access point"
+            actions={
+              <Link to="/system" className="text-[12px] text-accent-text hover:underline">
+                Details
+              </Link>
+            }
+          >
             <KeyValue
               items={[
-                { label: 'Model', value: device.model },
-                { label: 'Firmware', value: device.firmware || '—' },
-                { label: 'Hostname', value: device.hostname, mono: true },
-                { label: 'MAC', value: device.mac, mono: true },
                 { label: 'Management IP', value: device.mgmtIp ? `${device.mgmtIp}/${device.mgmtPrefix}` : '—', mono: true },
                 { label: 'Gateway', value: device.gateway || '—', mono: true },
-                { label: 'Country', value: device.country || '—' },
+                { label: 'Firmware', value: device.firmware || '—' },
                 { label: 'Uptime', value: formatDuration(device.uptimeSeconds) },
-                { label: 'Load', value: device.load.join(' / ') || '—' },
               ]}
             />
-          </Panel>
-          <Panel title="Resources">
-            <div className="space-y-3">
-              <div>
-                <Meter value={memUsed} label="Memory" warnAt={75} dangerAt={90} />
-                <p className="tabular mt-1 text-[11px] text-faint">
-                  {formatBytes(device.memTotal - device.memAvailable)} of {formatBytes(device.memTotal)}
-                </p>
-              </div>
-              <div>
-                <Meter value={storageUsed} label="Flash storage" warnAt={75} dangerAt={90} />
-                <p className="tabular mt-1 text-[11px] text-faint">{formatBytes(device.storageFree)} free</p>
-              </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3">
+              <Meter value={memUsed} label="Memory" warnAt={75} dangerAt={90} />
+              <Meter value={storageUsed} label="Flash" warnAt={75} dangerAt={90} />
             </div>
           </Panel>
-          <Panel title="Ethernet" bodyClassName="p-0">
-            <ul className="divide-y divide-line">
-              {interfaces.map((iface) => (
-                <li key={iface.name} className="flex items-center gap-2 px-3 py-2 text-[12px]">
-                  <Dot tone={iface.up ? 'ok' : 'danger'} />
-                  <span className="mono w-10 text-ink">{iface.name}</span>
-                  <span className="text-muted">{iface.up ? `${iface.speed} ${iface.duplex.toLowerCase()}` : 'no link'}</span>
-                  <span className="tabular ml-auto text-faint">
-                    ↓ {formatBytes(iface.inOctets)} · ↑ {formatBytes(iface.outOctets)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          <Panel
+            title="Ethernet"
+            actions={
+              <Link to="/network" className="text-[12px] text-accent-text hover:underline">
+                Network
+              </Link>
+            }
+          >
+            <PortCards interfaces={interfaces} compact />
           </Panel>
         </div>
       </div>
