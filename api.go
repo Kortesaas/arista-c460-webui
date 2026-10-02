@@ -28,6 +28,14 @@ type API struct {
 
 	cli        *CLIInfo
 	cliTrigger chan struct{}
+	command    func(context.Context, string) (string, error) // nil uses the native vendor CLI
+}
+
+func (a *API) runCommand(ctx context.Context, command string) (string, error) {
+	if a.command != nil {
+		return a.command(ctx, command)
+	}
+	return runCLI(ctx, command)
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -445,23 +453,35 @@ func (a *API) updateManagement(w http.ResponseWriter, r *http.Request) {
 	}
 	a.writeMu.Lock()
 	defer a.writeMu.Unlock()
-	current, _, _ := a.cli.Snapshot()
+	current, _, readErr := a.cli.Snapshot()
 	comm := current.CommVLAN
-	if comm == "" {
-		comm = "untagged"
+	if readErr != "" || current.Mode == "" || comm == "" {
+		fail(w, http.StatusServiceUnavailable, "Management settings are not ready. Refresh and try again.")
+		return
+	}
+	if req.CommVLAN != "" {
+		comm = req.CommVLAN
 	}
 	command, err := req.cliCommand(comm)
 	if err != nil {
 		fail(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, err := runCLI(r.Context(), command); err != nil {
+	if _, err := a.runCommand(r.Context(), command); err != nil {
 		log.Printf("management change failed: %v", err)
 		fail(w, http.StatusBadGateway, "The access point rejected the setting: "+err.Error())
 		return
 	}
 	log.Printf("management settings saved by %s: %s", clientIP(r), command)
-	a.cli.Refresh(r.Context())
+	if comm != current.CommVLAN {
+		id, _ := communicationVLANID(comm) // already validated by cliCommand
+		if _, err := a.runCommand(r.Context(), "force vlan communication id "+id); err != nil {
+			a.refreshCLI()
+			fail(w, http.StatusBadGateway, "Address settings were saved, but the management VLAN change failed: "+err.Error())
+			return
+		}
+	}
+	a.refreshCLI()
 	reply(w, http.StatusOK, map[string]any{"ok": true, "rebootRequired": true})
 }
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -100,6 +101,7 @@ func parseVLANConfig(text, comm string) Management {
 
 // ManagementRequest is the desired management configuration of the communication VLAN.
 type ManagementRequest struct {
+	CommVLAN  string   `json:"commVlan,omitempty"` // empty preserves the current communication VLAN
 	Mode      string   `json:"mode"`
 	IPv4      string   `json:"ipv4"`
 	Netmask   string   `json:"netmask"`
@@ -120,9 +122,9 @@ func ipv4Of(s string) net.IP {
 
 // cliCommand validates a request and returns the vendor CLI command for it.
 func (req ManagementRequest) cliCommand(commVLAN string) (string, error) {
-	id := "U"
-	if commVLAN != "untagged" {
-		id = commVLAN
+	id, err := communicationVLANID(commVLAN)
+	if err != nil {
+		return "", err
 	}
 	if req.Mode == "dhcp" {
 		return "force vlan dhcp id " + id, nil
@@ -173,6 +175,17 @@ func (req ManagementRequest) cliCommand(commVLAN string) (string, error) {
 		cmd += " dnsprefix4 " + s
 	}
 	return cmd, nil
+}
+
+func communicationVLANID(vlan string) (string, error) {
+	if vlan == "untagged" {
+		return "U", nil
+	}
+	id, err := strconv.Atoi(vlan)
+	if err != nil || id < 1 || id > 4094 || strconv.Itoa(id) != vlan {
+		return "", errors.New("management VLAN must be untagged or an integer from 1 to 4094")
+	}
+	return vlan, nil
 }
 
 // --------------------------------------------------------------- hardware
@@ -230,13 +243,22 @@ type CLIInfo struct {
 
 func (c *CLIInfo) Refresh(ctx context.Context) {
 	comm := "untagged"
-	if out, err := runCLI(ctx, "show vlan communication"); err == nil {
+	commOut, commErr := runCLI(ctx, "show vlan communication")
+	if commErr == nil {
+		out := commOut
 		if v := strings.TrimSpace(strings.TrimPrefix(out, "Communication VLAN:")); v != "" && !strings.EqualFold(v, "untagged") {
 			comm = v
 		}
 	}
 	vlanOut, vlanErr := runCLI(ctx, "show vlan config")
 	mgmt := parseVLANConfig(vlanOut, comm)
+	if commErr != nil {
+		vlanErr = commErr
+	} else if _, err := communicationVLANID(comm); err != nil {
+		vlanErr = err
+	} else if mgmt.Mode != "static" && mgmt.Mode != "dhcp" {
+		vlanErr = errors.New("cannot read the management VLAN's address configuration")
+	}
 	hw := HardwareInfo{LLDP: map[string]string{}, UpdatedAt: time.Now()}
 	if out, err := runCLI(ctx, "show device info"); err == nil {
 		hw.Serial = field(out, "Serial Number")
@@ -254,7 +276,9 @@ func (c *CLIInfo) Refresh(ctx context.Context) {
 	if out, err := runCLI(ctx, "show lldp neighbor info"); err == nil {
 		hw.LLDP = parseLLDP(out)
 	}
-	running, _ := interfaceIPv4("br0")
+	running, prefix := managementIPv4()
+	runningMask := net.IP(net.CIDRMask(prefix, 32)).String()
+	runningGateway := defaultGateway()
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -262,7 +286,8 @@ func (c *CLIInfo) Refresh(ctx context.Context) {
 		c.err = vlanErr.Error()
 	} else {
 		c.err = ""
-		mgmt.PendingBoot = mgmt.Mode == "static" && mgmt.IPv4 != "" && running != "" && mgmt.IPv4 != running
+		mgmt.PendingBoot = mgmt.Mode == "static" && mgmt.IPv4 != "" && running != "" &&
+			(mgmt.IPv4 != running || mgmt.Netmask != runningMask || mgmt.Gateway != runningGateway)
 		c.management = mgmt
 	}
 	c.hardware = hw

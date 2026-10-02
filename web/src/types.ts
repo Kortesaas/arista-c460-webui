@@ -132,6 +132,45 @@ export interface ApState {
   neighbors: Neighbor[]
   interfaces: Interface[]
   vlanNames: Record<string, string> | null
+  management: Management
+  hardware: HardwareInfo
+  managementError?: string
+}
+
+export interface Management {
+  commVlan: string
+  mode: 'static' | 'dhcp' | ''
+  ipv4: string
+  netmask: string
+  gateway: string
+  dns: string[] | null
+  dnsSearch: string
+  status: string
+  pendingReboot: boolean
+}
+
+export interface ManagementInput {
+  commVlan: string
+  mode: 'static' | 'dhcp'
+  ipv4: string
+  netmask: string
+  gateway: string
+  dns: string[]
+  dnsSearch: string
+}
+
+export interface HardwareInfo {
+  serial: string
+  powerSource: string
+  radioPower: string
+  ntpSynced: boolean | null
+  lldp: Record<string, string> | null
+  updatedAt: string
+}
+
+export interface TrustCheck {
+  ok: boolean
+  problems: string[] | null
 }
 
 export interface SsidInput {

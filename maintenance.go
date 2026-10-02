@@ -60,12 +60,16 @@ func runTrustCheck(ctx context.Context) TrustCheck {
 	cmd := exec.CommandContext(md5ctx, "md5sum", "-c", "/opt/sensor/sensor.md5")
 	cmd.Dir = "/"
 	cmd.Env = cleanEnv()
-	out, _ := cmd.CombinedOutput()
+	out, cmdErr := cmd.CombinedOutput()
+	before := len(problems)
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" && !strings.HasSuffix(line, ": OK") {
 			problems = append(problems, "vendor file check: "+line)
 		}
+	}
+	if cmdErr != nil && len(problems) == before {
+		problems = append(problems, "vendor file check could not complete: "+cmdErr.Error())
 	}
 	if len(problems) > 20 {
 		problems = append(problems[:20], "…and more")

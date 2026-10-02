@@ -85,3 +85,28 @@ func TestParseLLDP(t *testing.T) {
 		t.Fatalf("unexpected %v", got)
 	}
 }
+
+func TestManagementVLANValidation(t *testing.T) {
+	for _, vlan := range []string{"", "0", "4095", "099", "99; reboot", "99 id U", "-1"} {
+		if _, err := (ManagementRequest{Mode: "dhcp"}).cliCommand(vlan); err == nil {
+			t.Errorf("unsafe or invalid VLAN %q was accepted", vlan)
+		}
+	}
+	for _, vlan := range []string{"untagged", "1", "99", "4094"} {
+		if _, err := (ManagementRequest{Mode: "dhcp"}).cliCommand(vlan); err != nil {
+			t.Errorf("valid VLAN %q: %v", vlan, err)
+		}
+	}
+}
+
+func TestParseDHCPManagement(t *testing.T) {
+	for _, text := range []string{
+		"Settings for IPv4:\n99 dhcp\nSettings for IPv6:\n99 static",
+		"Settings for IPv4:\n99 dhcp No IP Address\nSettings for IPv6:\n99 static",
+	} {
+		m := parseVLANConfig(text, "99")
+		if m.Mode != "dhcp" || m.IPv4 != "" || m.Netmask != "" || m.Gateway != "" {
+			t.Fatalf("DHCP without a lease: %+v", m)
+		}
+	}
+}

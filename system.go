@@ -93,7 +93,7 @@ func readDevice(cfg *Config) Device {
 			d.Country = countryName(v)
 		}
 	}
-	d.MgmtIP, d.MgmtPrefix = interfaceIPv4("br0")
+	d.MgmtIP, d.MgmtPrefix = managementIPv4()
 	d.Gateway = defaultGateway()
 	return d
 }
@@ -131,6 +131,22 @@ func interfaceIPv4(name string) (string, int) {
 		}
 	}
 	return "", 0
+}
+
+// Tagged management uses br0.<VLAN>. Prefer the routed management interface
+// so the running address remains accurate after moving off the native VLAN.
+func managementIPv4() (string, int) {
+	if raw, err := os.ReadFile("/proc/net/route"); err == nil {
+		for _, line := range strings.Split(string(raw), "\n") {
+			f := strings.Fields(line)
+			if len(f) > 2 && f[1] == "00000000" && (f[0] == "br0" || strings.HasPrefix(f[0], "br0.")) {
+				if ip, prefix := interfaceIPv4(f[0]); ip != "" {
+					return ip, prefix
+				}
+			}
+		}
+	}
+	return interfaceIPv4("br0")
 }
 
 func defaultGateway() string {

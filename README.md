@@ -13,7 +13,9 @@ The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance tha
 - **Radios (read/write):** channel (regulatory list, DFS marked), channel width, transmit power, automatic channel/power, enable/disable. It shows the effective EIRP, channel utilisation and noise floor.
 - **Clients:** signal, SNR, rates, traffic, IP/hostname where the AP reports them.
 - **RF scan:** neighbouring access points with channel occupancy.
-- **System:** device and firmware information, Ethernet ports, administrator username and password.
+- **Management network (read/write):** static IPv4 or DHCP client, subnet mask, gateway, up to three DNS servers, DNS search domain, and native/untagged or tagged management VLAN. Saved changes apply after an AP restart; the UI shows the destination address.
+- **System:** device/VLAN display names, SSH enable/disable, timed LED location, restart with firmware boot-trust checks, hardware/power/clock/LLDP information, Ethernet ports, and administrator username and password.
+- A small pirate hat spins continuously while the page starts and waits for AP data, including after a restart. Reduced-motion preferences are respected.
 - Light, dark and system themes; works on phones.
 
 ## How it works
@@ -22,7 +24,7 @@ The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance tha
 browser ──HTTP :80──▶ c460-webui (Go, on the AP) ──gNMI/TLS 127.0.0.1:8080──▶ AP OpenConfig agent ──▶ radios
 ```
 
-The backend is a single static ARM64 Go binary with the React UI embedded (about 12 MB). It reads and writes configuration through the AP's own OpenConfig (gNMI) agent, so changes are validated and stored by the firmware itself and survive reboots. The agent's TLS certificate is pinned from `/opt/openconfig/cert/agent.crt`. Every AP-level write also re-sends the API user; this firmware otherwise resets API authentication on such writes.
+The backend is a single static ARM64 Go binary with the React UI embedded (about 12 MB). Wireless and SSH settings use the AP's OpenConfig (gNMI) agent. Management addresses, DNS, management VLAN, LED location and reboot use the native vendor CLI, because they are outside this firmware's OpenConfig coverage. Both paths use the firmware's saving mechanisms. The agent's TLS certificate is pinned from `/opt/openconfig/cert/agent.crt`. Every OpenConfig AP-level write also re-sends the API user; this firmware otherwise resets API authentication on such writes.
 
 Tested on a C-460 with firmware **18.2.0-32**.
 
@@ -108,6 +110,7 @@ Project layout: `*.go` contains the backend (`gnmi.go` agent client, `state.go` 
 
 ## Known limitations
 
-- Management IP, gateway, DNS and uplink settings are not editable yet. The firmware handles those outside OpenConfig.
+- Management configuration currently covers IPv4. DHCP mode configures the AP as a DHCP client, not a DHCP server. It does not change router/switch settings or wireless-client DHCP scopes. Tagged management needs a matching switch trunk; a new address must be reachable from the administrator's network.
+- Ethernet uplink selection, IPv6 management and NTP server configuration are not editable yet. Hardware, clock-sync and Ethernet status are shown where available.
 - The AP's OpenConfig converter rejects some modelled fields (for example WPA2/WPA3 transition mode, DHCP-required, some 802.11r/v timers), so the UI does not offer them.
 - Client detail fields are only shown when the firmware populates them.

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { KeyRound } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
+import { DisplaySettingsPanel, HardwarePanel, MaintenancePanel, ManagementPanel } from '@/components/SystemSettings'
 import { Dot } from '@/components/status'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
@@ -13,27 +14,32 @@ export function SystemPage() {
   if (!state) return <LoadingState />
   const { device, interfaces } = state
   return (
-    <Page title="System" description="Device information, Ethernet ports and access to this web interface.">
+    <Page title="System" description="Management network, device settings and maintenance.">
       <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Device">
-          <KeyValue
-            items={[
-              { label: 'Model', value: device.model },
-              { label: 'Firmware', value: device.firmware || '—' },
-              { label: 'Hostname', value: device.hostname, mono: true },
-              { label: 'MAC address', value: device.mac, mono: true },
-              { label: 'Management IP', value: device.mgmtIp ? `${device.mgmtIp}/${device.mgmtPrefix}` : '—', mono: true },
-              { label: 'Default gateway', value: device.gateway || '—', mono: true },
-              { label: 'Regulatory country', value: device.country || '—' },
-              { label: 'Uptime', value: formatDuration(device.uptimeSeconds) },
-              { label: 'Load average', value: device.load.join(' / ') || '—' },
-              { label: 'Memory', value: `${formatBytes(device.memAvailable)} free of ${formatBytes(device.memTotal)}` },
-              { label: 'Flash storage', value: `${formatBytes(device.storageFree)} free of ${formatBytes(device.storageTotal)}` },
-              { label: 'Temperature', value: device.temperatureC === null ? '—' : `${device.temperatureC.toFixed(1)} °C` },
-              { label: 'SSH', value: device.sshEnabled ? 'enabled' : 'disabled' },
-            ]}
-          />
-        </Panel>
+        <div className="space-y-3">
+          <ManagementPanel state={state} />
+          <DisplaySettingsPanel state={state} />
+          <Panel title="Device">
+            <KeyValue
+              items={[
+                { label: 'Model', value: device.model },
+                { label: 'Firmware', value: device.firmware || '—' },
+                { label: 'Hostname', value: device.hostname, mono: true },
+                { label: 'MAC address', value: device.mac, mono: true },
+                { label: 'Management IP', value: device.mgmtIp ? `${device.mgmtIp}/${device.mgmtPrefix}` : '—', mono: true },
+                { label: 'Default gateway', value: device.gateway || '—', mono: true },
+                { label: 'Regulatory country', value: device.country || '—' },
+                { label: 'Uptime', value: formatDuration(device.uptimeSeconds) },
+                { label: 'Load average', value: device.load.join(' / ') || '—' },
+                { label: 'Memory', value: `${formatBytes(device.memAvailable)} free of ${formatBytes(device.memTotal)}` },
+                { label: 'Flash storage', value: `${formatBytes(device.storageFree)} free of ${formatBytes(device.storageTotal)}` },
+                { label: 'Temperature', value: device.temperatureC === null ? '—' : `${device.temperatureC.toFixed(1)} °C` },
+                { label: 'SSH', value: device.sshEnabled ? 'enabled' : 'disabled' },
+              ]}
+            />
+          </Panel>
+          <HardwarePanel state={state} />
+        </div>
 
         <div className="space-y-3">
           <Panel title="Ethernet ports" bodyClassName="p-0">
@@ -65,10 +71,12 @@ export function SystemPage() {
               </tbody>
             </table>
           </Panel>
+          <MaintenancePanel state={state} />
           <PasswordPanel />
           <Panel title="About">
             <p className="text-[12px] leading-5 text-muted">
-              Local web interface for the C-460 access point, version <span className="mono text-ink">{device.uiVersion}</span>. It runs on the access point itself and manages it through the AP's own OpenConfig agent; no controller or cloud service is involved.
+              Local web interface for the C-460 access point, version <span className="mono text-ink">{device.uiVersion}</span>. Settings are managed through the AP’s OpenConfig
+              agent and native device commands. No controller or cloud service is involved.
             </p>
             <p className="mt-2 text-[11px] leading-4 text-faint">Unofficial project, not affiliated with or endorsed by Arista Networks. Use at your own risk.</p>
           </Panel>

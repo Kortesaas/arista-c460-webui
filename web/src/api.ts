@@ -1,4 +1,4 @@
-import type { ApState, RadioInput, SsidInput } from '@/types'
+import type { ApState, ManagementInput, RadioInput, SsidInput, TrustCheck } from '@/types'
 
 export class ApiError extends Error {
   constructor(
@@ -33,4 +33,11 @@ export const api = {
   updateSsid: (name: string, input: SsidInput) => call('PUT', `/api/ssids/${encodeURIComponent(name)}`, input),
   deleteSsid: (name: string) => call('DELETE', `/api/ssids/${encodeURIComponent(name)}`),
   updateRadio: (id: number, input: RadioInput) => call('PUT', `/api/radios/${id}`, input),
+  updateManagement: (input: ManagementInput) => call<{ ok: boolean; rebootRequired: boolean }>('PUT', '/api/management', input),
+  updateSettings: (siteName: string, vlanNames: Record<string, string>) => call('PUT', '/api/settings', { siteName, vlanNames }),
+  updateSSH: (enabled: boolean) => call('PUT', '/api/ssh', { enabled }),
+  trust: () => call<TrustCheck>('GET', '/api/trust'),
+  reboot: () => call('POST', '/api/reboot', {}),
+  locate: (minutes: number) => call('POST', '/api/locate', { minutes }),
+  stopLocate: () => call('DELETE', '/api/locate'),
 }
