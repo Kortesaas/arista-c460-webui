@@ -28,14 +28,7 @@ type API struct {
 
 	cli        *CLIInfo
 	cliTrigger chan struct{}
-	command    func(context.Context, string) (string, error) // nil uses the native vendor CLI
-}
-
-func (a *API) runCommand(ctx context.Context, command string) (string, error) {
-	if a.command != nil {
-		return a.command(ctx, command)
-	}
-	return runCLI(ctx, command)
+	stage      func(ManagementRequest, string) error // nil uses native management configuration files
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -462,27 +455,28 @@ func (a *API) updateManagement(w http.ResponseWriter, r *http.Request) {
 	if req.CommVLAN != "" {
 		comm = req.CommVLAN
 	}
-	command, err := req.cliCommand(comm)
+	_, err := req.cliCommand(comm)
 	if err != nil {
 		fail(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, err := a.runCommand(r.Context(), command); err != nil {
-		log.Printf("management change failed: %v", err)
-		fail(w, http.StatusBadGateway, "The access point rejected the setting: "+err.Error())
+	if managementMatches(req, comm, current) {
+		reply(w, http.StatusOK, map[string]any{"ok": true, "changed": false, "rebootRequired": current.PendingBoot})
 		return
 	}
-	log.Printf("management settings saved by %s: %s", clientIP(r), command)
-	if comm != current.CommVLAN {
-		id, _ := communicationVLANID(comm) // already validated by cliCommand
-		if _, err := a.runCommand(r.Context(), "force vlan communication id "+id); err != nil {
-			a.refreshCLI()
-			fail(w, http.StatusBadGateway, "Address settings were saved, but the management VLAN change failed: "+err.Error())
-			return
-		}
+	stage := a.stage
+	if stage == nil {
+		stage = func(req ManagementRequest, comm string) error { return stageManagement(r.Context(), req, comm) }
 	}
+	if err := stage(req, comm); err != nil {
+		log.Printf("management save failed: %v", err)
+		fail(w, http.StatusInternalServerError, "Could not save management settings: "+err.Error())
+		return
+	}
+	log.Printf("management settings staged by %s for VLAN %s", clientIP(r), comm)
+	a.cli.RecordManagement(req, comm)
 	a.refreshCLI()
-	reply(w, http.StatusOK, map[string]any{"ok": true, "rebootRequired": true})
+	reply(w, http.StatusOK, map[string]any{"ok": true, "changed": true, "rebootRequired": true})
 }
 
 func (a *API) trust(w http.ResponseWriter, r *http.Request) {

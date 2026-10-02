@@ -75,8 +75,8 @@ export function SystemPage() {
           <PasswordPanel />
           <Panel title="About">
             <p className="text-[12px] leading-5 text-muted">
-              Local web interface for the C-460 access point, version <span className="mono text-ink">{device.uiVersion}</span>. Settings are managed through the AP’s OpenConfig
-              agent and native device commands. No controller or cloud service is involved.
+              Local web interface for the C-460 access point, version <span className="mono text-ink">{device.uiVersion}</span>. Settings are managed locally through the AP’s OpenConfig
+              agent and native configuration. No controller or cloud service is involved.
             </p>
             <p className="mt-2 text-[11px] leading-4 text-faint">Unofficial project, not affiliated with or endorsed by Arista Networks. Use at your own risk.</p>
           </Panel>

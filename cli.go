@@ -16,7 +16,8 @@ import (
 )
 
 // Settings that this firmware does not expose through OpenConfig (management
-// IP, VLAN, LEDs, reboot) are handled by the vendor CLI (/sbin/cli).
+// IP, VLAN, LEDs, reboot) are read through the vendor CLI (/sbin/cli).
+// Management writes stage native files; LED location and reboot use CLI actions.
 
 // runCLI runs one vendor CLI command. The command is passed through the
 // environment, never interpolated into the shell line.
@@ -288,6 +289,7 @@ func (c *CLIInfo) Refresh(ctx context.Context) {
 		c.err = ""
 		mgmt.PendingBoot = mgmt.Mode == "static" && mgmt.IPv4 != "" && running != "" &&
 			(mgmt.IPv4 != running || mgmt.Netmask != runningMask || mgmt.Gateway != runningGateway)
+		mgmt.PendingBoot = mgmt.PendingBoot || managementPending()
 		c.management = mgmt
 	}
 	c.hardware = hw
@@ -298,6 +300,22 @@ func (c *CLIInfo) Snapshot() (Management, HardwareInfo, string) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.management, c.hardware, c.err
+}
+
+// Publish a completed save before replying, so a second request sees the new
+// desired settings even while the asynchronous vendor-CLI refresh is pending.
+func (c *CLIInfo) RecordManagement(req ManagementRequest, comm string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	m := Management{CommVLAN: comm, Mode: req.Mode, DNS: []string{}, PendingBoot: true}
+	if req.Mode == "static" {
+		m.IPv4, m.Netmask, m.Gateway = ipv4Of(req.IPv4).String(), ipv4Of(req.Netmask).String(), ipv4Of(req.Gateway).String()
+		m.DNSSearch = strings.TrimSpace(req.DNSSearch)
+		for _, server := range req.DNS {
+			m.DNS = append(m.DNS, ipv4Of(server).String())
+		}
+	}
+	c.management, c.err = m, ""
 }
 
 // Run refreshes at start and every interval; trigger forces a refresh.

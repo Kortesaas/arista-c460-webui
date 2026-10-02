@@ -9,11 +9,11 @@ function useSystemAction() {
   const [busy, setBusy] = useState(false)
   const toast = useApp((s) => s.toast)
   const refresh = useApp((s) => s.refresh)
-  const run = async (operation: () => Promise<unknown>, message: string) => {
+  const run = async (operation: () => Promise<unknown>, message: string | (() => string)) => {
     setBusy(true)
     try {
       await operation()
-      toast(message, 'ok')
+      toast(typeof message === 'function' ? message() : message, 'ok')
       void refresh()
       return true
     } catch (error) {
@@ -133,7 +133,18 @@ function ManagementDialog({ management: m, onClose, onSaved }: { management: Man
   const save = async () => {
     if (problem || busy) return
     const input = { ...form, dns: dns.filter(Boolean) }
-    if (await run(() => api.updateManagement(input), 'Management settings saved. Restart the AP to apply them.')) onSaved(input)
+    let needsRestart = false
+    if (
+      await run(
+        async () => {
+          needsRestart = (await api.updateManagement(input)).rebootRequired
+        },
+        () => (needsRestart ? 'Management settings saved. Restart the AP to apply them.' : 'Management settings are already up to date.'),
+      )
+    ) {
+      if (needsRestart) onSaved(input)
+      else onClose()
+    }
   }
   return (
     <Dialog

@@ -24,7 +24,7 @@ The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance tha
 browser ──HTTP :80──▶ c460-webui (Go, on the AP) ──gNMI/TLS 127.0.0.1:8080──▶ AP OpenConfig agent ──▶ radios
 ```
 
-The backend is a single static ARM64 Go binary with the React UI embedded (about 12 MB). Wireless and SSH settings use the AP's OpenConfig (gNMI) agent. Management addresses, DNS, management VLAN, LED location and reboot use the native vendor CLI, because they are outside this firmware's OpenConfig coverage. Both paths use the firmware's saving mechanisms. The agent's TLS certificate is pinned from `/opt/openconfig/cert/agent.crt`. Every OpenConfig AP-level write also re-sends the API user; this firmware otherwise resets API authentication on such writes.
+The backend is a single static ARM64 Go binary with the React UI embedded (about 12 MB). Wireless and SSH settings use the AP's OpenConfig (gNMI) agent. Management addresses, DNS and management VLAN are staged in the firmware's native `ifcfg-br0[.<VLAN>]` and discovery configuration files, preserving IPv6 and other discovery fields; the native management CLI reboots automatically, so it is deliberately not used for saving. Writes use the vendor's interface lock and roll back on failure. The AP consumes the saved settings at the next explicit restart. A boot-ID marker keeps the pending-restart notice accurate across web-service restarts. LED location and reboot use the native vendor CLI. The agent's TLS certificate is pinned from `/opt/openconfig/cert/agent.crt`. Every OpenConfig AP-level write also re-sends the API user; this firmware otherwise resets API authentication on such writes.
 
 Tested on a C-460 with firmware **18.2.0-32**.
 
