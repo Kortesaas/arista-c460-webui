@@ -262,3 +262,46 @@ export interface WirelessEventLog {
   clockSynced: boolean | null
   error?: string
 }
+
+/** Portable configuration backup produced by POST /api/backup. */
+export interface ConfigBackup {
+  format: 'c460-webui-backup'
+  version: number
+  createdAt: string
+  source: { model: string; hostname: string; firmware: string; ui: string }
+  ssids: { name: string; enabled: boolean; hidden: boolean; opmode: string; bands: Band[]; vlan: number | null; isolation: boolean }[]
+  radios: { band: Band; enabled: boolean; channel: number; width: number; power: number; dca: boolean; dtp: boolean }[]
+  management?: ManagementInput
+  labels: { siteName: string; vlanNames: Record<string, string> | null }
+  time?: { primary: string; secondary: string }
+  lldp?: { interval: number; hold: number }
+  secrets?: unknown
+}
+
+export interface RestoreSections {
+  wireless: boolean
+  radios: boolean
+  management: boolean
+  labels: boolean
+  time: boolean
+  lldp: boolean
+}
+
+export interface RestoreResult {
+  ok: boolean
+  applied: string[]
+  problems: string[] | null
+  rebootRequired: boolean
+}
+
+export interface SnmpSettings {
+  enabled: boolean
+  community: string
+  location: string
+  contact: string
+}
+
+export interface SnmpStatus extends SnmpSettings {
+  running: boolean
+  error?: string
+}

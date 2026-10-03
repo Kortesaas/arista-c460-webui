@@ -27,6 +27,7 @@ type API struct {
 	writeMu sync.Mutex // one configuration change at a time
 
 	cli          *CLIInfo
+	snmp         *SNMPAgent
 	cliTrigger   chan struct{}
 	stage        func(ManagementRequest, string) error // nil uses native management configuration files
 	wirelessDir  string                                // empty uses the firmware socket directory; overridden only in tests
@@ -61,6 +62,10 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/locate", a.protect(a.stopLocate))
 	mux.Handle("PUT /api/settings", a.protect(a.updateSettings))
 	mux.Handle("PUT /api/ssh", a.protect(a.updateSSH))
+	mux.Handle("POST /api/backup", a.protect(a.createBackup))
+	mux.Handle("POST /api/restore", a.protect(a.restoreBackup))
+	mux.Handle("GET /api/snmp", a.protect(a.snmpSettings))
+	mux.Handle("PUT /api/snmp", a.protect(a.updateSNMP))
 	mux.Handle("GET /api/time", a.protect(a.timeSettings))
 	mux.Handle("PUT /api/time", a.protect(a.updateTime))
 	mux.Handle("POST /api/diagnostics", a.protect(a.diagnose))
@@ -419,30 +424,40 @@ func (a *API) updateRadio(w http.ResponseWriter, r *http.Request) {
 	}
 	a.writeMu.Lock()
 	defer a.writeMu.Unlock()
+	entry, err := a.radioEntry(id, req)
+	if err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, errRadioNotFound) {
+			code = http.StatusNotFound
+		}
+		fail(w, code, err.Error())
+		return
+	}
+	body := map[string]any{"radios": map[string]any{"radio": []any{entry}}}
+	a.apply(w, r, fmt.Sprintf("update radio %d", id), body, nil)
+}
+
+var errRadioNotFound = errors.New("radio not found")
+
+// radioEntry validates a radio request against the radio's regulatory channel
+// list and band, and returns the OpenConfig list entry to send.
+func (a *API) radioEntry(id int, req radioRequest) (map[string]any, error) {
 	cfg, freq, ok := a.poller.RadioConfig(id)
 	if !ok {
-		fail(w, http.StatusNotFound, "radio not found")
-		return
+		return nil, errRadioNotFound
 	}
 	b := band(freq)
-	var radio *Radio
 	snapshot := a.poller.Snapshot()
-	for i := range snapshot.Radios {
-		if snapshot.Radios[i].ID == id {
-			radio = &snapshot.Radios[i]
+	for _, radio := range snapshot.Radios {
+		if radio.ID == id && len(radio.AllowedChannels) > 0 && !slices.Contains(radio.AllowedChannels, req.Channel) {
+			return nil, fmt.Errorf("channel %d is not allowed on the %s GHz radio", req.Channel, b)
 		}
 	}
-	if radio != nil && len(radio.AllowedChannels) > 0 && !slices.Contains(radio.AllowedChannels, req.Channel) {
-		fail(w, http.StatusBadRequest, fmt.Sprintf("channel %d is not allowed on this radio", req.Channel))
-		return
-	}
 	if !slices.Contains(widths[b], req.Width) {
-		fail(w, http.StatusBadRequest, fmt.Sprintf("%d MHz is not a valid width for %s GHz", req.Width, b))
-		return
+		return nil, fmt.Errorf("%d MHz is not a valid width for %s GHz", req.Width, b)
 	}
 	if req.Power < 1 || req.Power > 30 {
-		fail(w, http.StatusBadRequest, "transmit power must be 1–30 dBm")
-		return
+		return nil, errors.New("transmit power must be 1–30 dBm")
 	}
 	cfg["id"] = id
 	cfg["operating-frequency"] = freq
@@ -452,8 +467,7 @@ func (a *API) updateRadio(w http.ResponseWriter, r *http.Request) {
 	cfg["transmit-power"] = req.Power
 	cfg["dca"] = req.DCA
 	cfg["dtp"] = req.DTP
-	body := map[string]any{"radios": map[string]any{"radio": []any{map[string]any{"id": id, "operating-frequency": freq, "config": cfg}}}}
-	a.apply(w, r, fmt.Sprintf("update radio %d", id), body, nil)
+	return map[string]any{"id": id, "operating-frequency": freq, "config": cfg}, nil
 }
 
 // ------------------------------------------------------- management (CLI)

@@ -11,8 +11,13 @@ import type {
   SsidFeatures,
   LldpState,
   LldpTiming,
+  SnmpSettings,
+  SnmpStatus,
   NetworkSnapshot,
   WirelessEventLog,
+  ConfigBackup,
+  RestoreSections,
+  RestoreResult,
 } from '@/types'
 
 export class ApiError extends Error {
@@ -39,6 +44,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 export const api = {
+  backup: (passphrase: string) => call<ConfigBackup>('POST', '/api/backup', { passphrase }),
+  restore: (backup: ConfigBackup, passphrase: string, sections: RestoreSections, removeOthers: boolean, management?: ManagementInput) =>
+    call<RestoreResult>('POST', '/api/restore', { backup, passphrase, sections, removeOthers, management }),
   session: () => call<{ authenticated: boolean; configured: boolean; username: string }>('GET', '/api/session'),
   login: (username: string, password: string) => call<{ authenticated: boolean }>('POST', '/api/login', { username, password }),
   logout: () => call('POST', '/api/logout', {}),
@@ -54,6 +62,8 @@ export const api = {
   updateSsidFeatures: (name: string, rrm: boolean | null, load: boolean | null) => call('PUT', `/api/ssids/${encodeURIComponent(name)}/features`, { rrm, load }),
   lldp: () => call<LldpState>('GET', '/api/lldp'),
   updateLldp: (timing: LldpTiming) => call('PUT', '/api/lldp', timing),
+  snmp: () => call<SnmpStatus>('GET', '/api/snmp'),
+  updateSnmp: (settings: SnmpSettings) => call<SnmpStatus>('PUT', '/api/snmp', settings),
   updateRadio: (id: number, input: RadioInput) => call('PUT', `/api/radios/${id}`, input),
   updateManagement: (input: ManagementInput) => call<{ ok: boolean; changed: boolean; rebootRequired: boolean }>('PUT', '/api/management', input),
   updateSettings: (siteName: string, vlanNames: Record<string, string>) => call('PUT', '/api/settings', { siteName, vlanNames }),

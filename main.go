@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -32,12 +34,15 @@ type Config struct {
 	mu          sync.RWMutex
 	path        string
 	Listen      string            `json:"listen"`
+	HTTPSListen string            `json:"httpsListen"` // "" = ":443"; "off" disables HTTPS
+	TLSDir      string            `json:"tlsDir"`
 	Hostname    string            `json:"hostname"` // gNMI access-point key; derived from the eth0 MAC when empty
 	PollSeconds int               `json:"pollSeconds"`
 	AuthFile    string            `json:"authFile"`
 	SiteName    string            `json:"siteName"`  // optional label shown in the UI
 	VLANNames   map[string]string `json:"vlanNames"` // optional, e.g. {"10": "Control"}
 	GNMI        GNMIConfig        `json:"gnmi"`
+	SNMP        SNMPSettings      `json:"snmp"`
 }
 
 type GNMIConfig struct {
@@ -197,7 +202,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	api := &API{cfg: cfg, auth: auth, gnmi: gnmi, poller: poller, cli: cliInfo, cliTrigger: cliTrigger}
+	snmp := NewSNMPAgent(cfg, poller.Snapshot)
+	if err := snmp.Apply(); err != nil {
+		log.Printf("%v", err)
+	}
+	defer snmp.Close()
+	api := &API{cfg: cfg, auth: auth, gnmi: gnmi, poller: poller, cli: cliInfo, cliTrigger: cliTrigger, snmp: snmp}
 	mux := http.NewServeMux()
 	api.Register(mux)
 	go api.maintainLLDP(ctx)
@@ -211,11 +221,44 @@ func main() {
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+	var httpsServer *http.Server
+	if cfg.HTTPSListen != "off" {
+		addr := cfg.HTTPSListen
+		if addr == "" {
+			addr = ":443"
+		}
+		dir := cfg.TLSDir
+		if dir == "" {
+			dir = filepath.Join(filepath.Dir(*configPath), "tls")
+		}
+		if cert, err := loadOrCreateCertificate(dir, cfg.Hostname); err != nil {
+			log.Printf("https disabled: %v", err)
+		} else {
+			httpsServer = &http.Server{
+				Addr:              addr,
+				Handler:           server.Handler,
+				TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12},
+				ReadHeaderTimeout: server.ReadHeaderTimeout,
+				ReadTimeout:       server.ReadTimeout,
+				WriteTimeout:      server.WriteTimeout,
+				IdleTimeout:       server.IdleTimeout,
+			}
+			go func() {
+				log.Printf("https listening on %s", addr)
+				if err := httpsServer.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+					log.Printf("https: %v", err)
+				}
+			}()
+		}
+	}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = server.Shutdown(shutdown)
+		if httpsServer != nil {
+			_ = httpsServer.Shutdown(shutdown)
+		}
 	}()
 	log.Printf("c460-webui %s listening on %s (access point %s)", version, cfg.Listen, cfg.Hostname)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

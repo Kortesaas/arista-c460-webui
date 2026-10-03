@@ -4,6 +4,7 @@ import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
 import { DisplaySettingsPanel, MaintenancePanel } from '@/components/SystemSettings'
 import { RefreshPanel } from '@/components/RefreshSettings'
+import { BackupPanel } from '@/components/Backup'
 import { Meter } from '@/components/status'
 import { cn } from '@/ui/cn'
 import { api } from '@/api'
@@ -72,6 +73,7 @@ export function SystemPage() {
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <div className="space-y-3">
           <MaintenancePanel state={state} />
+          <BackupPanel />
           <PasswordPanel />
         </div>
         <div className="space-y-3">

@@ -19,6 +19,9 @@ The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance tha
 - **Time synchronisation (read/write):** primary and secondary NTP servers, service and clock-sync status. Saves use the native encrypted configuration, with local desired settings restored when the WebUI service starts.
 - **Diagnostics:** AP-side ping, DNS lookup, route tracing and TCP-port connectivity; VLAN/bridge paths, management routes and learned neighbours; searchable wireless connection, channel and radar events with text export; and live per-BSSID operating state. Tests have fixed time/output limits. Client details can prefill a connection test.
 - **System:** device/VLAN display names, SSH enable/disable, timed LED location, restart with firmware boot-trust checks, hardware/power/clock/LLDP information, Ethernet ports, and administrator username and password.
+- **Backup and restore:** download SSIDs, radios, management network, names, time servers and LLDP timing as a JSON file and apply it to the same or another C-460, choosing which parts to apply. Wi-Fi passwords are left out unless you set a passphrase; then they are encrypted with it (scrypt + AES-256-GCM). Management addresses are off by default when copying, so a second AP does not take over the first one's IP.
+- **SNMP monitoring (read-only):** optional SNMP v1/v2c agent on UDP 161 with MIB-II system group, ifTable and ifXTable (64-bit counters) for both Ethernet sockets. ifIndex 1/2 always means ETH 1/ETH 2. Community, location and contact are set under Network; writes are always refused.
+- **HTTPS:** served on port 443 with a self-signed certificate generated on first start, next to plain HTTP on port 80.
 - **Live updates:** shared AP sampling configurable from 1–60 seconds (default 5). Browsers follow that cadence, pause in background tabs, share pending requests and back off during an outage. Slow AP reads can extend the interval; detailed hardware information remains a separate, slower sample.
 - A small pirate hat spins continuously while the page starts and waits for AP data, including after a restart. Reduced-motion preferences are respected.
 - Light, dark and system themes; works on phones.
@@ -88,6 +91,8 @@ deploy/deploy.sh <ap> --check      # runs deploy/overlay-check.sh on the AP, rea
 | Key | Default | Meaning |
 |---|---|---|
 | `listen` | `:80` | HTTP listen address |
+| `httpsListen` | `:443` | HTTPS listen address; `off` disables HTTPS |
+| `tlsDir` | `tls/` next to the config | Self-signed certificate and key (generated on first start) |
 | `pollSeconds` | `5` | Shared AP sampling interval, 1–60 seconds; editable in System → Live updates |
 | `authFile` | `/opt/c460-webui/auth.json` | Username and bcrypt password hash |
 | `hostname` | eth0 MAC with dashes | OpenConfig access-point key |
@@ -95,10 +100,11 @@ deploy/deploy.sh <ap> --check      # runs deploy/overlay-check.sh on the AP, rea
 | `vlanNames` | — | Optional VLAN id → name map |
 | `gnmi.username` / `gnmi.password` | — | OpenConfig API user (required) |
 | `gnmi.address` | `127.0.0.1:8080` | Agent address |
+| `snmp` | off | `enabled`, `community`, `location`, `contact`; editable under Network → Monitoring. `listen` (default `:161`) is file-only |
 
 ## Security notes
 
-- The UI is plain HTTP; use it on a trusted management network. Sessions use an HttpOnly, SameSite=Strict cookie. Login failures are rate-limited, and changes require a JSON request.
+- The UI is served over HTTP and over HTTPS with a self-signed certificate; use it on a trusted management network. SNMP v1/v2c sends the community in clear text, so only enable it on the management network. Sessions use an HttpOnly, SameSite=Strict cookie. Login failures are rate-limited, and changes require a JSON request.
 - Wi-Fi passwords are never sent to the browser.
 - `config.json` contains the OpenConfig API password; keep it at mode 0600 and never commit it (`*.secret.json` and `secrets/` are gitignored).
 

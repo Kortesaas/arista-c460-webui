@@ -2,6 +2,7 @@ import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
 import { ManagementPanel } from '@/components/SystemSettings'
 import { LldpPanel } from '@/components/LldpSettings'
+import { SnmpPanel } from '@/components/SnmpSettings'
 import { TimePanel } from '@/components/TimeSettings'
 import { PortCards } from '@/components/Ports'
 import { useApp } from '@/stores/app'
@@ -12,11 +13,12 @@ export function NetworkPage() {
   const state = useApp((store) => store.state)
   if (!state) return <LoadingState />
   return (
-    <Page title="Network" description="Management address, Ethernet ports, switch discovery and time.">
+    <Page title="Network" description="Management address, Ethernet ports, switch discovery, time and monitoring.">
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="space-y-3">
           <ManagementPanel state={state} />
           <TimePanel />
+          <SnmpPanel />
         </div>
         <div className="space-y-3">
           <Panel
