@@ -73,15 +73,16 @@ export function SystemPage() {
       </Panel>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        {/* Left: the device itself. Right: names, logins and the interface. */}
         <div className="space-y-3">
           <MaintenancePanel state={state} />
           <BackupPanel />
-          {isAdmin && <PasswordPanel />}
-          <ViewerPanel />
+          <RefreshPanel />
         </div>
         <div className="space-y-3">
           <DisplaySettingsPanel state={state} />
-          <RefreshPanel />
+          {isAdmin && <PasswordPanel />}
+          <ViewerPanel />
           <Panel title="About">
             <p className="text-[12px] leading-5 text-muted">
               ARRR-ISTA C460 web interface <span className="mono text-ink">{device.uiVersion}</span>. Runs on the access point and manages it through the AP’s own

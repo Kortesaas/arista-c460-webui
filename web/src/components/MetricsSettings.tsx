@@ -3,7 +3,7 @@ import { Copy, Eye, EyeOff, KeyRound } from 'lucide-react'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
 import type { MetricsSettings } from '@/types'
-import { Badge, Button, IconButton, KeyValue, Panel, Spinner, Toggle } from '@/ui/kit'
+import { Badge, Button, IconButton, KeyValue, Panel, SubSection, Spinner } from '@/ui/kit'
 
 function copy(text: string, toast: (t: string) => void) {
   void navigator.clipboard?.writeText(text).then(
@@ -13,7 +13,9 @@ function copy(text: string, toast: (t: string) => void) {
 }
 
 /** Prometheus scrape endpoint, protected by a bearer token. */
-export function MetricsPanel() {
+/** With `bare`, renders as a section of a shared Monitoring panel. */
+export function MetricsPanel({ bare = false }: { bare?: boolean }) {
+  const Box = bare ? SubSection : Panel
   const toast = useApp((s) => s.toast)
   const ip = useApp((s) => s.state?.device.mgmtIp)
   const isAdmin = useApp((s) => s.role === 'admin')
@@ -47,9 +49,17 @@ export function MetricsPanel() {
     : ''
 
   return (
-    <Panel
-      title="Monitoring · Prometheus"
+    <Box
+      title={bare ? 'Prometheus' : 'Monitoring · Prometheus'}
       help="Exposes clients, radios, Ethernet counters, temperature and health findings in Prometheus format at /metrics. Scrapers must send the token as a bearer token. Off by default."
+      actions={
+        m && (
+          <Button size="sm" write disabled={busy} onClick={() => void update(!m.enabled, false)}>
+            {busy && <Spinner size={12} />}
+            {m.enabled ? 'Turn off' : 'Turn on'}
+          </Button>
+        )
+      }
     >
       {error ? (
         <p role="alert" className="text-[12px] text-danger">
@@ -59,17 +69,11 @@ export function MetricsPanel() {
         <p className="text-[12px] text-muted">Reading metrics settings…</p>
       ) : (
         <>
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <Toggle checked={m.enabled} onChange={(v) => isAdmin && !busy && void update(v, false)} label="Metrics endpoint" />
-            </div>
-            {busy && <Spinner size={12} />}
-            <Badge tone={m.enabled ? 'ok' : 'neutral'}>{m.enabled ? 'On' : 'Off'}</Badge>
-          </div>
+          <KeyValue items={[{ label: 'Status', value: <Badge tone={m.enabled ? 'ok' : 'neutral'}>{m.enabled ? 'On' : 'Off'}</Badge> }]} />
           {m.enabled && (
             <>
               <KeyValue
-                className="mt-2"
+                className="mt-1.5"
                 items={[
                   { label: 'Endpoint', value: url, mono: true },
                   {
@@ -105,6 +109,6 @@ export function MetricsPanel() {
           )}
         </>
       )}
-    </Panel>
+    </Box>
   )
 }

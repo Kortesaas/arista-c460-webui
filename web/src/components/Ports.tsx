@@ -23,7 +23,7 @@ function Socket({ up }: { up: boolean }) {
 /** The two Ethernet sockets with link state, uplink role and traffic. */
 export function PortCards({ interfaces, compact }: { interfaces: Interface[]; compact?: boolean }) {
   return (
-    <div className={cn('grid gap-2', compact ? 'grid-cols-2' : 'sm:grid-cols-2')}>
+    <div className="grid gap-2 sm:grid-cols-2">
       {interfaces.map((iface) => (
         <div key={iface.name} className={cn('rounded-lg border p-3', iface.up ? 'border-line bg-surface' : 'border-dashed border-line bg-surface-2')}>
           <div className="flex items-start gap-3">

@@ -19,8 +19,14 @@ export function NetworkPage() {
         <div className="space-y-3">
           <ManagementPanel state={state} />
           <TimePanel />
-          <SnmpPanel />
-          <MetricsPanel />
+          <Panel title="Monitoring" help="Let network monitors poll this AP: SNMP like your switches, or Prometheus. Both are read-only and off by default." bodyClassName="divide-y divide-line px-3">
+            <div className="py-3">
+              <SnmpPanel bare />
+            </div>
+            <div className="py-3">
+              <MetricsPanel bare />
+            </div>
+          </Panel>
         </div>
         <div className="space-y-3">
           <Panel

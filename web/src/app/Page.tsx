@@ -4,7 +4,8 @@ import { cn } from '@/ui/cn'
 /** Standard scrolling page: heading, description, actions, then content. */
 export function Page({ title, description, actions, children, width = 'wide', dense }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; children: ReactNode; width?: 'wide' | 'narrow' | 'full'; dense?: boolean }) {
   return (
-    <div className={cn('p-3 sm:p-4', dense ? 'lg:p-4' : 'lg:p-6')}>
+    // Same padding on every page, so content edges line up when switching pages.
+    <div className="p-3 sm:p-4 lg:p-6">
       <div className={cn('mx-auto', width === 'wide' ? 'max-w-[1500px]' : width === 'narrow' ? 'max-w-3xl' : '')}>
         <header className={cn('flex flex-col justify-between gap-3 sm:flex-row sm:items-start', dense ? 'mb-3' : 'mb-4 lg:mb-5')}>
           <div className="min-w-0">

@@ -192,6 +192,22 @@ export function Segmented<T extends string | number>({
 
 /* ----------------------------------------------------------------- surface */
 
+/** A titled block inside a panel, for panels that group several topics. */
+export function SubSection({ title, help, actions, children, className }: { title: ReactNode; help?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <div className={cn('min-w-0', className)}>
+      <div className="mb-2 flex min-h-7 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h3 className="truncate text-2xs font-semibold uppercase tracking-wider text-faint">{title}</h3>
+          {help && <HelpTip label={typeof title === 'string' ? title : 'Help'}>{help}</HelpTip>}
+        </div>
+        {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
 export function Panel({
   title,
   help,
@@ -259,10 +275,13 @@ export function EmptyState({ icon, title, description, action }: { icon?: ReactN
 /** Key/value rows used in inspectors and detail pages. */
 export function KeyValue({ items, className }: { items: { label: string; value: ReactNode; mono?: boolean }[]; className?: string }) {
   return (
-    <dl className={cn('grid grid-cols-[minmax(80px,auto)_1fr] gap-x-3 gap-y-1 text-[12px]', className)}>
+    // A fixed label column keeps values aligned across neighbouring panels.
+    <dl className={cn('grid grid-cols-[8.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[12px] leading-[18px] sm:grid-cols-[9.5rem_minmax(0,1fr)]', className)}>
       {items.map((item) => (
         <div key={item.label} className="contents">
-          <dt className="truncate text-faint">{item.label}</dt>
+          <dt className="truncate text-faint" title={item.label}>
+            {item.label}
+          </dt>
           <dd className={cn('min-w-0 break-words text-ink', item.mono && 'mono')}>{item.value ?? '—'}</dd>
         </div>
       ))}

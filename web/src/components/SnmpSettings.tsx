@@ -3,9 +3,11 @@ import { Pencil, Save } from 'lucide-react'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
 import type { SnmpSettings, SnmpStatus } from '@/types'
-import { Badge, Button, Dialog, DialogActions, Field, Input, KeyValue, Panel, Spinner, Toggle } from '@/ui/kit'
+import { Badge, Button, Dialog, DialogActions, Field, Input, KeyValue, Panel, SubSection, Spinner, Toggle } from '@/ui/kit'
 
-export function SnmpPanel() {
+/** With `bare`, renders as a section of a shared Monitoring panel. */
+export function SnmpPanel({ bare = false }: { bare?: boolean }) {
+  const Box = bare ? SubSection : Panel
   const [status, setStatus] = useState<SnmpStatus | null>(null)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
@@ -19,8 +21,8 @@ export function SnmpPanel() {
   }, [])
 
   return (
-    <Panel
-      title="Monitoring · SNMP"
+    <Box
+      title={bare ? 'SNMP' : 'Monitoring · SNMP'}
       help="Lets network monitors poll this AP like a switch: name, uptime, location and both Ethernet ports with traffic counters (MIB-II system, ifTable and ifXTable). Read-only over SNMP v1 and v2c on UDP port 161; nothing can be changed through SNMP."
       actions={
         <Button size="sm" write disabled={!status} onClick={() => setEditing(true)}>
@@ -39,7 +41,7 @@ export function SnmpPanel() {
           <KeyValue
             items={[
               {
-                label: 'Agent',
+                label: 'Status',
                 value: status.enabled ? (
                   <Badge tone={status.running ? 'ok' : 'danger'}>{status.running ? 'Running, read-only' : 'Not running'}</Badge>
                 ) : (
@@ -73,7 +75,7 @@ export function SnmpPanel() {
           }}
         />
       )}
-    </Panel>
+    </Box>
   )
 }
 
