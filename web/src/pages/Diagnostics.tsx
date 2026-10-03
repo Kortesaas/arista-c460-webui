@@ -95,7 +95,7 @@ function ConnectivityPanel() {
             </Field>
           )}
         </div>
-        <Button type="submit" variant="primary" disabled={busy || !target.trim()}>
+        <Button type="submit" variant="primary" write={false} disabled={busy || !target.trim()}>
           {busy ? <Spinner size={13} /> : <Play size={13} />} {busy ? 'Testing…' : 'Run test'}
         </Button>
       </form>

@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { RotateCcw, Save } from 'lucide-react'
+import { Lightbulb, RotateCcw, Save } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
 import { BandChip, Meter } from '@/components/status'
 import { ChannelChart } from '@/components/Charts'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
+import { useStaging } from '@/stores/staging'
+import { recommendChannel } from '@/utils/channels'
 import type { Band, Radio, RadioInput } from '@/types'
 import { Badge, Button, Field, KeyValue, Panel, Segmented, Select, Spinner, Toggle } from '@/ui/kit'
 import { isDfs, plural } from '@/utils/format'
@@ -36,6 +38,8 @@ function inputOf(radio: Radio): RadioInput {
 function RadioCard({ radio }: { radio: Radio }) {
   const change = useApp((store) => store.change)
   const neighbors = useApp((store) => store.state?.neighbors) ?? []
+  const stage = useStaging((s) => s.stage)
+  const pending = useStaging((s) => s.changes.some((c) => c.kind === 'radio' && c.id === radio.id))
   const [form, setForm] = useState<RadioInput>(() => inputOf(radio))
   const [busy, setBusy] = useState(false)
   const initial = inputOf(radio)
@@ -49,6 +53,7 @@ function RadioCard({ radio }: { radio: Radio }) {
     await change(`${radio.band} GHz radio updated`, () => api.updateRadio(radio.id, form))
     setBusy(false)
   }
+  const advice = radio.enabled && neighbors.length ? recommendChannel(radio, neighbors, form.width) : null
 
   return (
     <Panel
@@ -57,7 +62,12 @@ function RadioCard({ radio }: { radio: Radio }) {
           <BandChip band={radio.band} /> radio
         </span>
       }
-      actions={<Badge tone={radio.enabled ? 'ok' : 'neutral'}>{radio.enabled ? 'On' : 'Off'}</Badge>}
+      actions={
+        <span className="flex gap-1">
+          {pending && <Badge tone="accent">pending change</Badge>}
+          <Badge tone={radio.enabled ? 'ok' : 'neutral'}>{radio.enabled ? 'On' : 'Off'}</Badge>
+        </span>
+      }
       bodyClassName="p-3 space-y-4"
     >
       <div className="grid grid-cols-3 gap-2 rounded border border-line bg-surface-2 p-2.5 text-center">
@@ -92,6 +102,26 @@ function RadioCard({ radio }: { radio: Radio }) {
           <ChannelChart band={radio.band} neighbors={neighbors} ours={radio.channel} channels={radio.allowedChannels} height={44} compact />
         </div>
       </div>
+
+      {advice && (
+        <div className={`flex items-start gap-2 rounded border px-2.5 py-2 text-[12px] leading-4 ${advice.better ? 'border-accent bg-accent-soft' : 'border-line bg-surface-2'}`}>
+          <Lightbulb size={14} className={`mt-px shrink-0 ${advice.better ? 'text-accent-text' : 'text-faint'}`} />
+          {advice.better ? (
+            <p className="min-w-0 flex-1 text-ink">
+              Channel <span className="font-semibold">{advice.channel}</span> looks quieter: {plural(advice.networks, 'nearby network')} overlap there, {advice.currentNetworks} on channel {radio.channel}.
+              {isDfs(radio.band, advice.channel) && ' It is a radar (DFS) channel.'}
+              {radio.dca && ' Automatic channel is on; using it switches to manual.'}
+            </p>
+          ) : (
+            <p className="min-w-0 flex-1 text-muted">Channel {radio.channel} is already among the quietest here ({plural(advice.currentNetworks, 'overlapping network')}).</p>
+          )}
+          {advice.better && form.channel !== advice.channel && (
+            <Button size="sm" write onClick={() => setForm((f) => ({ ...f, channel: advice.channel, dca: false }))}>
+              Use {advice.channel}
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="space-y-3 border-t border-line pt-3">
         <Toggle checked={form.enabled} onChange={(value) => set('enabled', value)} label="Radio enabled" help="Turning a radio off stops every wireless network on this band." />
@@ -135,8 +165,11 @@ function RadioCard({ radio }: { radio: Radio }) {
           <Button disabled={!dirty || busy} onClick={() => setForm(initial)}>
             <RotateCcw size={13} /> Reset
           </Button>
+          <Button write disabled={!dirty || busy} onClick={() => stage({ kind: 'radio', id: radio.id, radio: form })} title="Collect this with other changes and apply them together">
+            Add to pending
+          </Button>
           <Button variant="primary" disabled={!dirty || busy} onClick={() => void save()}>
-            {busy ? <Spinner size={12} /> : <Save size={13} />} Apply
+            {busy ? <Spinner size={12} /> : <Save size={13} />} Apply now
           </Button>
         </div>
       </div>

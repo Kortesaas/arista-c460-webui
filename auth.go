@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,24 +24,44 @@ const (
 	failureWindow   = 5 * time.Minute
 )
 
-// Auth holds a single admin password (bcrypt) and in-memory sessions.
+// Auth holds the administrator and an optional read-only account (bcrypt)
+// and in-memory sessions.
 type Auth struct {
 	mu       sync.Mutex
 	file     string
-	sessions map[string]time.Time
+	sessions map[string]Session
 	failures map[string][]time.Time
 }
 
-type authFile struct {
+type Role string
+
+const (
+	RoleAdmin  Role = "admin"
+	RoleViewer Role = "viewer"
+)
+
+type Session struct {
+	User    string
+	Role    Role
+	expires time.Time
+}
+
+type authAccount struct {
 	Username     string `json:"username"`
 	PasswordHash string `json:"passwordHash"`
+}
+
+type authFile struct {
+	Username     string       `json:"username"`
+	PasswordHash string       `json:"passwordHash"`
+	Viewer       *authAccount `json:"viewer,omitempty"`
 }
 
 // DefaultUsername matches the AP's own CLI account name.
 const DefaultUsername = "config"
 
 func NewAuth(file string) *Auth {
-	return &Auth{file: file, sessions: map[string]time.Time{}, failures: map[string][]time.Time{}}
+	return &Auth{file: file, sessions: map[string]Session{}, failures: map[string][]time.Time{}}
 }
 
 func (a *Auth) load() (authFile, error) {
@@ -86,19 +107,19 @@ func validUsername(name string) error {
 	return nil
 }
 
-// SetCredentials stores a username and bcrypt password hash.
-func (a *Auth) SetCredentials(username, password string) error {
+func hashPassword(username, password string) (string, error) {
 	if err := validUsername(username); err != nil {
-		return err
+		return "", err
 	}
 	if len(password) < 6 {
-		return errors.New("password must be at least 6 characters")
+		return "", errors.New("password must be at least 6 characters")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-	raw, _ := json.Marshal(authFile{Username: username, PasswordHash: string(hash)})
+	return string(hash), err
+}
+
+func (a *Auth) save(f authFile) error {
+	raw, _ := json.Marshal(f)
 	if err := os.MkdirAll(filepath.Dir(a.file), 0o700); err != nil {
 		return err
 	}
@@ -109,6 +130,74 @@ func (a *Auth) SetCredentials(username, password string) error {
 	return os.Rename(tmp, a.file)
 }
 
+// SetCredentials stores the administrator's username and bcrypt password
+// hash; a read-only account is kept.
+func (a *Auth) SetCredentials(username, password string) error {
+	hash, err := hashPassword(username, password)
+	if err != nil {
+		return err
+	}
+	f, _ := a.load()
+	if f.Viewer != nil && strings.EqualFold(f.Viewer.Username, username) {
+		return errors.New("the read-only account already uses this username")
+	}
+	f.Username, f.PasswordHash = username, hash
+	return a.save(f)
+}
+
+// ViewerName returns the read-only account's username, or "" without one.
+func (a *Auth) ViewerName() string {
+	if f, err := a.load(); err == nil && f.Viewer != nil {
+		return f.Viewer.Username
+	}
+	return ""
+}
+
+// SetViewer creates or replaces the read-only account and signs out its sessions.
+func (a *Auth) SetViewer(username, password string) error {
+	f, err := a.load()
+	if err != nil {
+		return errNotConfigured
+	}
+	if strings.EqualFold(f.Username, username) {
+		return errors.New("the administrator already uses this username")
+	}
+	hash, err := hashPassword(username, password)
+	if err != nil {
+		return err
+	}
+	f.Viewer = &authAccount{Username: username, PasswordHash: hash}
+	if err := a.save(f); err != nil {
+		return err
+	}
+	a.endRole(RoleViewer)
+	return nil
+}
+
+// RemoveViewer deletes the read-only account and signs out its sessions.
+func (a *Auth) RemoveViewer() error {
+	f, err := a.load()
+	if err != nil {
+		return errNotConfigured
+	}
+	f.Viewer = nil
+	if err := a.save(f); err != nil {
+		return err
+	}
+	a.endRole(RoleViewer)
+	return nil
+}
+
+func (a *Auth) endRole(role Role) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for token, s := range a.sessions {
+		if s.Role == role {
+			delete(a.sessions, token)
+		}
+	}
+}
+
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -117,8 +206,9 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// Check verifies username and password, rate limiting failures per client address.
-func (a *Auth) Check(r *http.Request, username, password string) error {
+// Check verifies username and password, rate limiting failures per client
+// address, and returns the role of the matching account.
+func (a *Auth) Check(r *http.Request, username, password string) (Role, error) {
 	ip := clientIP(r)
 	a.mu.Lock()
 	now := time.Now()
@@ -132,24 +222,28 @@ func (a *Auth) Check(r *http.Request, username, password string) error {
 	locked := len(recent) >= maxFailures
 	a.mu.Unlock()
 	if locked {
-		return errTooManyAttempts
+		return "", errTooManyAttempts
 	}
 	f, err := a.load()
 	if err != nil {
-		return errNotConfigured
+		return "", errNotConfigured
 	}
-	userOK := subtle.ConstantTimeCompare([]byte(username), []byte(f.Username)) == 1
-	if bcrypt.CompareHashAndPassword([]byte(f.PasswordHash), []byte(password)) != nil || !userOK {
+	account, role := authAccount{Username: f.Username, PasswordHash: f.PasswordHash}, RoleAdmin
+	if f.Viewer != nil && subtle.ConstantTimeCompare([]byte(username), []byte(f.Viewer.Username)) == 1 {
+		account, role = *f.Viewer, RoleViewer
+	}
+	userOK := subtle.ConstantTimeCompare([]byte(username), []byte(account.Username)) == 1
+	if bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)) != nil || !userOK {
 		a.mu.Lock()
 		a.failures[ip] = append(a.failures[ip], now)
 		a.mu.Unlock()
 		time.Sleep(400 * time.Millisecond)
-		return errBadPassword
+		return "", errBadPassword
 	}
 	a.mu.Lock()
 	delete(a.failures, ip)
 	a.mu.Unlock()
-	return nil
+	return role, nil
 }
 
 var (
@@ -158,7 +252,7 @@ var (
 	errBadPassword     = errors.New("wrong username or password")
 )
 
-func (a *Auth) NewSession(w http.ResponseWriter) error {
+func (a *Auth) NewSession(w http.ResponseWriter, user string, role Role) error {
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
 		return err
@@ -166,12 +260,12 @@ func (a *Auth) NewSession(w http.ResponseWriter) error {
 	token := hex.EncodeToString(buf)
 	a.mu.Lock()
 	now := time.Now()
-	for t, exp := range a.sessions {
-		if now.After(exp) {
+	for t, s := range a.sessions {
+		if now.After(s.expires) {
 			delete(a.sessions, t)
 		}
 	}
-	a.sessions[token] = now.Add(sessionLifetime)
+	a.sessions[token] = Session{User: user, Role: role, expires: now.Add(sessionLifetime)}
 	a.mu.Unlock()
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: token, Path: "/", HttpOnly: true,
@@ -180,19 +274,25 @@ func (a *Auth) NewSession(w http.ResponseWriter) error {
 	return nil
 }
 
-func (a *Auth) Valid(r *http.Request) bool {
+// Session returns the caller's session, if it is valid.
+func (a *Auth) Session(r *http.Request) (Session, bool) {
 	c, err := r.Cookie(sessionCookie)
 	if err != nil {
-		return false
+		return Session{}, false
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	exp, ok := a.sessions[c.Value]
-	if !ok || time.Now().After(exp) {
+	s, ok := a.sessions[c.Value]
+	if !ok || time.Now().After(s.expires) {
 		delete(a.sessions, c.Value)
-		return false
+		return Session{}, false
 	}
-	return true
+	return s, true
+}
+
+func (a *Auth) Valid(r *http.Request) bool {
+	_, ok := a.Session(r)
+	return ok
 }
 
 // EndSession removes the caller's session; with others=true every other session is dropped instead.

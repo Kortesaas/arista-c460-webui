@@ -40,7 +40,7 @@ export function RefreshPanel() {
               ))}
           </Select>
         </Field>
-        <Button disabled={busy || seconds === current} onClick={() => void save()}>
+        <Button write disabled={busy || seconds === current} onClick={() => void save()}>
           {busy ? <Spinner size={13} /> : <Save size={13} />} Save
         </Button>
       </div>

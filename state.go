@@ -68,6 +68,7 @@ type SSID struct {
 	Isolation   bool     `json:"isolation"`
 	MFP         bool     `json:"mfp"`
 	HasPassword bool     `json:"hasPassword"`
+	MixedStatus string   `json:"mixedStatus,omitempty"` // WPA2/WPA3 mixed: "applied", "pending" or a problem
 	BSSIDs      []BSSID  `json:"bssids"`
 	Clients     int      `json:"clients"`
 	RxBytes     float64  `json:"rxBytes"`
@@ -139,7 +140,12 @@ type Poller struct {
 	mu    sync.RWMutex
 	raw   map[string]any // normalized access-point tree, including secrets; never sent to clients
 	state APState
+
+	observers []func(APState) // called after each successful sample
 }
+
+// OnSample registers f to receive every successful sample; register before Run.
+func (p *Poller) OnSample(f func(APState)) { p.observers = append(p.observers, f) }
 
 func NewPoller(g *GNMI, cfg *Config, interval time.Duration) *Poller {
 	return &Poller{gnmi: g, cfg: cfg, interval: interval, trigger: make(chan struct{}, 1),
@@ -196,6 +202,14 @@ func (p *Poller) Refresh() {
 }
 
 func (p *Poller) poll(ctx context.Context) {
+	if st, ok := p.sample(ctx); ok {
+		for _, f := range p.observers {
+			f(st)
+		}
+	}
+}
+
+func (p *Poller) sample(ctx context.Context) (APState, bool) {
 	device := readDevice(p.cfg)
 	raw, err := p.gnmi.GetAP(ctx)
 	var tree map[string]any
@@ -211,7 +225,7 @@ func (p *Poller) poll(ctx context.Context) {
 		log.Printf("poll: %v", err)
 		p.state.Error = "Cannot read the access point configuration: " + err.Error()
 		p.state.Device = device
-		return
+		return APState{}, false
 	}
 	p.raw = tree
 	st := build(tree)
@@ -227,6 +241,7 @@ func (p *Poller) poll(ctx context.Context) {
 	st.PollSeconds = p.cfg.RefreshSeconds()
 	_, st.VLANNames = p.cfg.Labels()
 	p.state = st
+	return st, true
 }
 
 func (p *Poller) Snapshot() APState {

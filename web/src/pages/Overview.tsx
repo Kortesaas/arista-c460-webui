@@ -8,6 +8,8 @@ import { cn } from '@/ui/cn'
 import { Badge, EmptyState, KeyValue, Panel } from '@/ui/kit'
 import { PortCards, portLabel } from '@/components/Ports'
 import { formatDuration, isDfs, opModeShort, plural } from '@/utils/format'
+import { HealthPanel, healthTone } from '@/components/Health'
+import { TrendsPanel } from '@/components/Trends'
 
 export function OverviewPage() {
   const state = useApp((store) => store.state)
@@ -17,7 +19,7 @@ export function OverviewPage() {
   const activeSsids = ssids.filter((ssid) => ssid.enabled)
   const activeRadios = radios.filter((radio) => radio.enabled)
   const uplinks = interfaces.filter((iface) => iface.up)
-  const healthy = !state.error && activeRadios.length > 0 && uplinks.length > 0
+  const tone = state.error || activeRadios.length === 0 ? 'danger' : healthTone(state.health)
   const memUsed = device.memTotal ? ((device.memTotal - device.memAvailable) / device.memTotal) * 100 : null
   const storageUsed = device.storageTotal ? ((device.storageTotal - device.storageFree) / device.storageTotal) * 100 : null
 
@@ -25,7 +27,7 @@ export function OverviewPage() {
     <Page
       title={
         <span className="flex items-center gap-2.5">
-          <span className={cn('h-3 w-3 rounded-full', healthy ? 'bg-ok pulse-ok' : 'bg-warn')} />
+          <span className={cn('h-3 w-3 rounded-full', tone === 'ok' ? 'bg-ok pulse-ok' : tone === 'warn' ? 'bg-warn' : 'bg-danger')} />
           {device.siteName || device.hostname}
         </span>
       }
@@ -56,6 +58,10 @@ export function OverviewPage() {
         />
       </div>
 
+      {/* On narrow screens problems come first; on wide screens they sit in the right column. */}
+      <div className="mt-3 xl:hidden">
+        <HealthPanel items={state.health ?? []} />
+      </div>
       <div className="mt-3 grid gap-3 xl:grid-cols-[1.4fr_1fr]">
         <section className="min-w-0 space-y-3">
           <div>
@@ -97,6 +103,8 @@ export function OverviewPage() {
             </div>
           </div>
 
+          <TrendsPanel />
+
           <Panel
             title={`Wireless networks (${ssids.length})`}
             bodyClassName="p-0"
@@ -133,6 +141,9 @@ export function OverviewPage() {
         </section>
 
         <div className="min-w-0 space-y-3">
+          <div className="hidden xl:block">
+            <HealthPanel items={state.health ?? []} />
+          </div>
           <Panel
             title="Access point"
             actions={

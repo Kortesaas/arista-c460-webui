@@ -40,6 +40,7 @@ export const bandLabel = (band: Band | '') => (band ? `${band} GHz` : '—')
 
 export const opModeLabel: Record<string, string> = {
   WPA3_SAE: 'WPA3 Personal',
+  WPA2_WPA3_PERSONAL: 'WPA2/WPA3 Personal (mixed)',
   WPA2_PERSONAL: 'WPA2 Personal',
   ENHANCED_OPEN: 'Enhanced Open (OWE)',
   OPEN: 'Open',

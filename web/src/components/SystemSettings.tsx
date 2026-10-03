@@ -35,7 +35,7 @@ export function ManagementPanel({ state }: { state: ApState }) {
     <Panel
       title="Management network"
       actions={
-        <Button size="sm" disabled={!ready} onClick={() => setEditing(true)}>
+        <Button size="sm" write disabled={!ready} onClick={() => setEditing(true)}>
           <Pencil size={12} />
           Edit
         </Button>
@@ -236,7 +236,7 @@ export function DisplaySettingsPanel({ state }: { state: ApState }) {
     <Panel
       title="Names and labels"
       actions={
-        <Button size="sm" onClick={() => setEditing(true)}>
+        <Button size="sm" write onClick={() => setEditing(true)}>
           <Pencil size={12} />
           Edit
         </Button>
@@ -346,7 +346,7 @@ export function MaintenancePanel({ state }: { state: ApState }) {
             <HelpTip label="SSH access">Command-line access to the AP for administration and recovery. Disabling it also closes open SSH sessions.</HelpTip>
           </p>
         </div>
-        <Button disabled={busy} onClick={() => setDialog('ssh')}>
+        <Button write disabled={busy} onClick={() => setDialog('ssh')}>
           {state.device.sshEnabled ? 'Disable SSH' : 'Enable SSH'}
         </Button>
       </div>
@@ -365,11 +365,11 @@ export function MaintenancePanel({ state }: { state: ApState }) {
               ))}
             </Select>
           </Field>
-          <Button disabled={busy} onClick={() => void run(() => api.locate(Number(minutes)), 'AP location LEDs started.')}>
+          <Button write disabled={busy} onClick={() => void run(() => api.locate(Number(minutes)), 'AP location LEDs started.')}>
             <Lightbulb size={13} />
             Blink LEDs
           </Button>
-          <Button disabled={busy} onClick={() => void run(api.stopLocate, 'AP location LEDs stopped.')}>
+          <Button write disabled={busy} onClick={() => void run(api.stopLocate, 'AP location LEDs stopped.')}>
             Stop blinking
           </Button>
         </div>
@@ -381,7 +381,7 @@ export function MaintenancePanel({ state }: { state: ApState }) {
             Applies saved management network settings. Before restarting, the AP's boot safety check runs; the restart is refused if the firmware would erase local changes.
           </HelpTip>
         </p>
-        <Button disabled={busy} onClick={() => setDialog('reboot')}>
+        <Button write disabled={busy} onClick={() => setDialog('reboot')}>
           <Power size={13} />
           Restart AP
         </Button>

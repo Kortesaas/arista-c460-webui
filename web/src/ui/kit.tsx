@@ -1,5 +1,7 @@
 import {
   cloneElement,
+  createContext,
+  useContext,
   isValidElement,
   useEffect,
   useId,
@@ -15,11 +17,20 @@ import { createPortal } from 'react-dom'
 import { CircleHelp, X } from 'lucide-react'
 import { cn } from '@/ui/cn'
 
+/* --------------------------------------------------------------- read-only */
+
+/** True for the read-only account: buttons that change something are disabled. */
+export const ReadOnlyContext = createContext(false)
+export const useReadOnly = () => useContext(ReadOnlyContext)
+export const READ_ONLY_HINT = 'Read-only account: sign in as administrator to change this'
+
 /* ------------------------------------------------------------------ button */
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'default' | 'primary' | 'ghost' | 'danger'
   size?: 'sm' | 'md'
+  /** Changes the AP. Defaults to true for primary and danger buttons; pass false for e.g. "Run test". */
+  write?: boolean
 }
 
 const buttonStyles = {
@@ -29,11 +40,15 @@ const buttonStyles = {
   danger: 'bg-transparent border-line text-danger hover:bg-danger-soft hover:border-danger',
 }
 
-export function Button({ variant = 'default', size = 'md', className, type = 'button', ...props }: ButtonProps) {
+export function Button({ variant = 'default', size = 'md', className, type = 'button', write, ...props }: ButtonProps) {
+  const readOnly = useReadOnly()
+  const blocked = readOnly && (write ?? (variant === 'primary' || variant === 'danger'))
   return (
     <button
       type={type}
       {...props}
+      disabled={props.disabled || blocked}
+      title={blocked ? READ_ONLY_HINT : props.title}
       className={cn(
         'inline-flex shrink-0 items-center justify-center gap-1.5 rounded border font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
         size === 'sm' ? 'h-7 px-2 text-xs' : 'h-8 px-2.5 text-[13px]',
@@ -50,14 +65,17 @@ export function IconButton({
   className,
   label,
   size = 'lg',
+  write,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; size?: keyof typeof iconButtonSizes }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; size?: keyof typeof iconButtonSizes; write?: boolean }) {
+  const blocked = useReadOnly() && Boolean(write)
   return (
     <button
       type="button"
       {...props}
+      disabled={props.disabled || blocked}
       aria-label={label}
-      title={label}
+      title={blocked ? `${label} · ${READ_ONLY_HINT}` : label}
       className={cn(
         'grid shrink-0 place-items-center rounded text-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:pointer-events-none disabled:opacity-30',
         iconButtonSizes[size],

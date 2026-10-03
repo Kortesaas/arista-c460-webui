@@ -57,7 +57,7 @@ export function LoginPage() {
             <Input type="password" autoComplete="current-password" autoFocus={Boolean(username)} value={password} onChange={(event) => setPassword(event.target.value)} disabled={!configured || busy} />
           </Field>
           {error && <p className="mt-2 text-[12px] text-danger">{error}</p>}
-          <Button type="submit" variant="primary" className="mt-4 w-full" disabled={!configured || busy || password.length === 0 || username.trim().length === 0}>
+          <Button type="submit" variant="primary" write={false} className="mt-4 w-full" disabled={!configured || busy || password.length === 0 || username.trim().length === 0}>
             {busy ? <Spinner size={13} /> : <LogIn size={14} />}
             Sign in
           </Button>

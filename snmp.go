@@ -580,7 +580,11 @@ func (s *SNMPAgent) status(err error) snmpStatus {
 }
 
 func (a *API) snmpSettings(w http.ResponseWriter, r *http.Request) {
-	reply(w, http.StatusOK, a.snmp.status(nil))
+	st := a.snmp.status(nil)
+	if !a.isAdmin(r) {
+		st.Community = "" // read-only accounts do not see the shared secret
+	}
+	reply(w, http.StatusOK, st)
 }
 
 func (a *API) updateSNMP(w http.ResponseWriter, r *http.Request) {

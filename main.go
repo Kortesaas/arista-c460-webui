@@ -33,16 +33,20 @@ var version = "dev"
 type Config struct {
 	mu          sync.RWMutex
 	path        string
-	Listen      string            `json:"listen"`
-	HTTPSListen string            `json:"httpsListen"` // "" = ":443"; "off" disables HTTPS
-	TLSDir      string            `json:"tlsDir"`
-	Hostname    string            `json:"hostname"` // gNMI access-point key; derived from the eth0 MAC when empty
-	PollSeconds int               `json:"pollSeconds"`
-	AuthFile    string            `json:"authFile"`
-	SiteName    string            `json:"siteName"`  // optional label shown in the UI
-	VLANNames   map[string]string `json:"vlanNames"` // optional, e.g. {"10": "Control"}
-	GNMI        GNMIConfig        `json:"gnmi"`
-	SNMP        SNMPSettings      `json:"snmp"`
+	Listen      string                  `json:"listen"`
+	HTTPSListen string                  `json:"httpsListen"` // "" = ":443"; "off" disables HTTPS
+	TLSDir      string                  `json:"tlsDir"`
+	Hostname    string                  `json:"hostname"` // gNMI access-point key; derived from the eth0 MAC when empty
+	PollSeconds int                     `json:"pollSeconds"`
+	AuthFile    string                  `json:"authFile"`
+	SiteName    string                  `json:"siteName"`  // optional label shown in the UI
+	VLANNames   map[string]string       `json:"vlanNames"` // optional, e.g. {"10": "Control"}
+	GNMI        GNMIConfig              `json:"gnmi"`
+	SNMP        SNMPSettings            `json:"snmp"`
+	Metrics     MetricsSettings         `json:"metrics"`
+	TimeZone    string                  `json:"timeZone"`  // IANA name, e.g. "Europe/Berlin"; schedules use it
+	Schedules   map[string]SSIDSchedule `json:"schedules"` // per SSID
+	ChangeLog   string                  `json:"changeLog"` // file; default next to the config
 }
 
 type GNMIConfig struct {
@@ -193,7 +197,6 @@ func main() {
 	defer stop()
 
 	poller := NewPoller(gnmi, cfg, time.Duration(cfg.PollSeconds)*time.Second)
-	go poller.Run(ctx)
 	cliInfo := &CLIInfo{}
 	cliTrigger := make(chan struct{}, 1)
 	go cliInfo.Run(ctx, 5*time.Minute, cliTrigger)
@@ -207,10 +210,21 @@ func main() {
 		log.Printf("%v", err)
 	}
 	defer snmp.Close()
-	api := &API{cfg: cfg, auth: auth, gnmi: gnmi, poller: poller, cli: cliInfo, cliTrigger: cliTrigger, snmp: snmp}
+	changeLogFile := cfg.ChangeLog
+	if changeLogFile == "" {
+		changeLogFile = filepath.Join(filepath.Dir(*configPath), "changes.json")
+	}
+	history := NewHistory()
+	poller.OnSample(history.Observe)
+	api := &API{cfg: cfg, auth: auth, gnmi: gnmi, poller: poller, cli: cliInfo, cliTrigger: cliTrigger, snmp: snmp,
+		changes: NewChangeLog(changeLogFile), history: history, overrides: NewWirelessOverrides(filepath.Join(filepath.Dir(*configPath), "wireless-overrides.json"))}
 	mux := http.NewServeMux()
 	api.Register(mux)
+	mux.HandleFunc("GET /metrics", api.metricsEndpoint)
 	go api.maintainLLDP(ctx)
+	go api.runEnforcer(ctx)
+	go api.runScheduler(ctx)
+	go poller.Run(ctx)
 	mux.Handle("/", spaHandler(dist))
 
 	server := &http.Server{

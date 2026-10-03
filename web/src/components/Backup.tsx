@@ -71,7 +71,7 @@ export function BackupPanel() {
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
         <p className="text-[13px] text-ink">Restore or copy from a file</p>
         <input ref={file} type="file" accept="application/json,.json" className="hidden" onChange={(e) => void open(e.target)} />
-        <Button onClick={() => file.current?.click()}>
+        <Button write onClick={() => file.current?.click()}>
           <Upload size={13} /> Choose file…
         </Button>
       </div>

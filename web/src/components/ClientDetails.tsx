@@ -4,7 +4,8 @@ import { RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
 import type { Client, NativeClient } from '@/types'
-import { Badge, Button, Dialog, DialogActions, KeyValue, Spinner } from '@/ui/kit'
+import { Badge, Button, Dialog, DialogActions, KeyValue, SectionLabel, Spinner } from '@/ui/kit'
+import { ClientSignal } from '@/components/ClientSignal'
 import { formatBytes, formatDuration } from '@/utils/format'
 
 export function ClientDialog({ client, onClose }: { client: Client; onClose: () => void }) {
@@ -15,6 +16,7 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
   const [confirm, setConfirm] = useState(false)
   const toast = useApp((s) => s.toast)
   const refresh = useApp((s) => s.refresh)
+  const sampledAt = useApp((s) => s.state?.generatedAt)
   useEffect(() => {
     let active = true
     api
@@ -76,6 +78,10 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
           ]}
         />
       </div>
+      <div className="mt-4 border-t border-line pt-3">
+        <SectionLabel className="mb-2">Signal, last 2 hours</SectionLabel>
+        <ClientSignal mac={client.mac} sampledAt={sampledAt} />
+      </div>
       {v.flags && (
         <div className="mt-4 flex flex-wrap gap-1">
           {v.flags.match(/\[[^\]]+\]/g)?.map((flag) => (
@@ -110,7 +116,7 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
         <Button disabled={busy} onClick={() => (confirm ? setConfirm(false) : onClose())}>
           {confirm ? 'Cancel' : 'Close'}
         </Button>
-        <Button variant={confirm ? 'danger' : 'default'} disabled={busy || !native || Boolean(error)} onClick={() => (confirm ? void reconnect() : setConfirm(true))}>
+        <Button write variant={confirm ? 'danger' : 'default'} disabled={busy || !native || Boolean(error)} onClick={() => (confirm ? void reconnect() : setConfirm(true))}>
           {busy ? <Spinner size={13} /> : <RefreshCw size={13} />}
           {confirm ? 'Disconnect client' : 'Reconnect client'}
         </Button>

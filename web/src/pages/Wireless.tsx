@@ -1,27 +1,58 @@
 import { useState } from 'react'
-import { Eye, EyeOff, Pencil, Plus, Trash2, Wifi, SlidersHorizontal } from 'lucide-react'
+import { CalendarClock, Eye, EyeOff, Pencil, Plus, QrCode, Trash2, Wifi, SlidersHorizontal } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { WirelessFeaturesDialog } from '@/components/WirelessFeatures'
+import { JoinCodeDialog } from '@/components/JoinCode'
+import { ScheduleDialog, scheduleSummary } from '@/components/Schedule'
 import { LoadingState } from '@/components/Loading'
 import { BandChip, Dot, VlanChip } from '@/components/status'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
-import type { Band, Ssid, SsidInput } from '@/types'
+import { changeTarget, useStaging } from '@/stores/staging'
+import type { Band, Ssid, SsidInput, StagedChange } from '@/types'
 import { cn } from '@/ui/cn'
 import { Badge, Button, Dialog, DialogActions, EmptyState, Field, IconButton, Input, Panel, Segmented, Select, Spinner, Toggle } from '@/ui/kit'
 import { formatBytes, opModeLabel, opModeShort, plural } from '@/utils/format'
 
 const BANDS: Band[] = ['2.4', '5', '6']
-const SECURITY = ['WPA3_SAE', 'WPA2_PERSONAL', 'ENHANCED_OPEN', 'OPEN'] as const
-const needsPassword = (mode: string) => mode === 'WPA3_SAE' || mode === 'WPA2_PERSONAL'
+const SECURITY = ['WPA3_SAE', 'WPA2_WPA3_PERSONAL', 'WPA2_PERSONAL', 'ENHANCED_OPEN', 'OPEN'] as const
+const needsPassword = (mode: string) => mode === 'WPA3_SAE' || mode === 'WPA2_WPA3_PERSONAL' || mode === 'WPA2_PERSONAL'
 const allows6 = (mode: string) => mode === 'WPA3_SAE' || mode === 'ENHANCED_OPEN'
+const securityHint: Record<string, string> = {
+  WPA3_SAE: 'Most secure. Some older devices (lighting consoles, audio gear, older phones) cannot join.',
+  WPA2_WPA3_PERSONAL: 'Older devices join with WPA2, newer ones use WPA3. Works on 2.4 and 5 GHz; use a separate WPA3 network for 6 GHz.',
+  WPA2_PERSONAL: 'Only for devices that fail with WPA2/WPA3 mixed. Not allowed on 6 GHz.',
+  ENHANCED_OPEN: 'No password, but traffic is encrypted. Not every device supports it.',
+  OPEN: 'No password and no encryption. Anyone nearby can join and read the traffic.',
+}
+
+/** Small status line for a mixed-mode network whose native setting is not active yet. */
+function MixedBadge({ ssid }: { ssid: Ssid }) {
+  if (ssid.opmode !== 'WPA2_WPA3_PERSONAL' || !ssid.mixedStatus || ssid.mixedStatus === 'applied') return null
+  if (ssid.mixedStatus === 'pending')
+    return (
+      <Badge tone="warn" title="The AP is switching this network to WPA2/WPA3 mixed. Until then only WPA3 devices can join. This takes up to a minute.">
+        activating mixed
+      </Badge>
+    )
+  return (
+    <Badge tone="danger" title={`${ssid.mixedStatus}. WPA3 devices can still join.`}>
+      WPA2 inactive
+    </Badge>
+  )
+}
 
 export function WirelessPage() {
   const state = useApp((store) => store.state)
+  const staged = useStaging((s) => s.changes)
   const [editing, setEditing] = useState<Ssid | 'new' | null>(null)
   const [advanced, setAdvanced] = useState<Ssid | null>(null)
   const [deleting, setDeleting] = useState<Ssid | null>(null)
+  const [joining, setJoining] = useState<string | null>(null)
+  const [scheduling, setScheduling] = useState<string | null>(null)
   if (!state) return <LoadingState />
+  const pendingFor = (name: string) => staged.find((c) => changeTarget(c) === `ssid:${name}`)
+  const stagedNew = staged.filter((c): c is Extract<StagedChange, { kind: 'ssid-create' }> => c.kind === 'ssid-create')
 
   return (
     <Page
@@ -57,18 +88,32 @@ export function WirelessPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {state.ssids.map((ssid) => (
+              {state.ssids.map((ssid) => {
+                const pending = pendingFor(ssid.name)
+                const schedule = scheduleSummary(state.schedules?.[ssid.name], state.timeZone)
+                return (
                 <tr key={ssid.name} className="hover:bg-surface-2/50">
                   <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <Dot tone={ssid.enabled ? 'ok' : 'neutral'} />
                       <span className="font-medium text-ink">{ssid.name}</span>
                       {!ssid.enabled && <Badge>disabled</Badge>}
                       {ssid.hidden && <Badge>hidden</Badge>}
                       {ssid.isolation && <Badge tone="accent">isolated</Badge>}
+                      {pending && <Badge tone="accent">{pending.kind === 'ssid-delete' ? 'pending delete' : 'pending change'}</Badge>}
+                    </div>
+                    {schedule && (
+                      <button type="button" onClick={() => setScheduling(ssid.name)} className="ml-4 mt-0.5 flex items-center gap-1 text-[11px] text-muted hover:text-accent-text">
+                        <CalendarClock size={11} /> {schedule}
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-muted">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {opModeShort(ssid.opmode)}
+                      <MixedBadge ssid={ssid} />
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-muted">{opModeShort(ssid.opmode)}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex gap-1">
                       {BANDS.map((band) => {
@@ -91,16 +136,35 @@ export function WirelessPage() {
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex justify-end gap-0.5">
+                      <IconButton label={`Join code for ${ssid.name}`} write onClick={() => setJoining(ssid.name)}>
+                        <QrCode size={14} />
+                      </IconButton>
+                      <IconButton label={`Schedule for ${ssid.name}`} write onClick={() => setScheduling(ssid.name)}>
+                        <CalendarClock size={14} />
+                      </IconButton>
                       <IconButton label={`Advanced settings for ${ssid.name}`} onClick={() => setAdvanced(ssid)}>
                         <SlidersHorizontal size={14} />
                       </IconButton>
-                      <IconButton label={`Edit ${ssid.name}`} onClick={() => setEditing(ssid)}>
+                      <IconButton label={`Edit ${ssid.name}`} write onClick={() => setEditing(ssid)}>
                         <Pencil size={14} />
                       </IconButton>
-                      <IconButton label={`Delete ${ssid.name}`} onClick={() => setDeleting(ssid)} className="hover:text-danger">
+                      <IconButton label={`Delete ${ssid.name}`} write onClick={() => setDeleting(ssid)} className="hover:text-danger">
                         <Trash2 size={14} />
                       </IconButton>
                     </div>
+                  </td>
+                </tr>
+                )
+              })}
+              {stagedNew.map((c) => (
+                <tr key={`new-${c.ssid.name}`} className="bg-accent-soft/40 text-muted">
+                  <td className="px-3 py-2.5" colSpan={7}>
+                    <span className="flex items-center gap-2">
+                      <Plus size={13} className="text-accent-text" />
+                      <span className="font-medium text-ink">{c.ssid.name}</span>
+                      <Badge tone="accent">pending, new</Badge>
+                      <span className="text-[12px]">{opModeShort(c.ssid.opmode)} · {c.ssid.bands.join('/')} GHz</span>
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -115,10 +179,12 @@ export function WirelessPage() {
           state.ssids.reduce((sum, ssid) => sum + ssid.bssids.length, 0),
           'BSSID',
         )}{' '}
-        broadcasting. Saving a change restarts Wi-Fi on this AP for a few seconds.
+        broadcasting. Saving a change restarts Wi-Fi on this AP for a few seconds; use “Add to pending” to collect several changes and restart once.
       </p>
 
       {advanced && <WirelessFeaturesDialog name={advanced.name} onClose={() => setAdvanced(null)} />}
+      {joining && <JoinCodeDialog name={joining} onClose={() => setJoining(null)} />}
+      {scheduling && <ScheduleDialog name={scheduling} onClose={() => setScheduling(null)} />}
       {editing && <SsidDialog ssid={editing === 'new' ? null : editing} existing={state.ssids.map((ssid) => ssid.name)} onClose={() => setEditing(null)} />}
       {deleting && <DeleteDialog ssid={deleting} onClose={() => setDeleting(null)} />}
     </Page>
@@ -127,6 +193,8 @@ export function WirelessPage() {
 
 function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: string[]; onClose: () => void }) {
   const change = useApp((store) => store.change)
+  const stage = useStaging((s) => s.stage)
+  const staged = useStaging((s) => s.changes)
   const [form, setForm] = useState<SsidInput>(() => ({
     name: ssid?.name ?? '',
     enabled: ssid?.enabled ?? true,
@@ -157,13 +225,18 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
     if (!keepExisting && (form.password.length < 8 || form.password.length > 63)) problems.push('The password must be 8–63 characters.')
   }
   if (vlanMode === 'tagged' && (!Number.isInteger(vlan) || vlan === null || vlan < 1 || vlan > 4094)) problems.push('Enter a VLAN ID between 1 and 4094.')
+  if (staged.some((c) => c.kind === 'ssid-create' && c.ssid.name === name) && name !== ssid?.name) problems.push('A pending new network already uses this name.')
 
+  const input = (): SsidInput => ({ ...form, name, vlan })
   const save = async () => {
     setBusy(true)
-    const input = { ...form, name, vlan }
-    const ok = await change(ssid ? `Saved ${name}` : `Created ${name}`, () => (ssid ? api.updateSsid(ssid.name, input) : api.createSsid(input)))
+    const ok = await change(ssid ? `Saved ${name}` : `Created ${name}`, () => (ssid ? api.updateSsid(ssid.name, input()) : api.createSsid(input())))
     setBusy(false)
     if (ok) onClose()
+  }
+  const later = () => {
+    stage(ssid ? { kind: 'ssid-update', name: ssid.name, ssid: input() } : { kind: 'ssid-create', ssid: input() })
+    onClose()
   }
 
   return (
@@ -173,7 +246,7 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
           <Input value={form.name} maxLength={32} onChange={(event) => set('name', event.target.value)} placeholder="My network" />
         </Field>
 
-        <Field label="Security">
+        <Field label="Security" hint={securityHint[form.opmode]}>
           <Select
             value={form.opmode}
             onChange={(event) => {
@@ -282,9 +355,12 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
 
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
+        <Button write disabled={busy || problems.length > 0} onClick={later} title="Collect this with other changes and apply them together">
+          Add to pending
+        </Button>
         <Button variant="primary" disabled={busy || problems.length > 0} onClick={() => void save()}>
           {busy && <Spinner size={12} />}
-          {ssid ? 'Save' : 'Create network'}
+          {ssid ? 'Save now' : 'Create now'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -293,12 +369,23 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
 
 function DeleteDialog({ ssid, onClose }: { ssid: Ssid; onClose: () => void }) {
   const change = useApp((store) => store.change)
+  const stage = useStaging((s) => s.stage)
   const [busy, setBusy] = useState(false)
   return (
     <Dialog title={`Delete ${ssid.name}?`} description="The network stops broadcasting and its settings are removed from this access point." onClose={onClose}>
       {ssid.clients > 0 && <p className="text-[13px] text-warn">{plural(ssid.clients, 'client is', 'clients are')} connected right now and will be disconnected.</p>}
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
+        <Button
+          write
+          disabled={busy}
+          onClick={() => {
+            stage({ kind: 'ssid-delete', name: ssid.name })
+            onClose()
+          }}
+        >
+          Add to pending
+        </Button>
         <Button
           variant="danger"
           disabled={busy}
@@ -311,7 +398,7 @@ function DeleteDialog({ ssid, onClose }: { ssid: Ssid; onClose: () => void }) {
           }}
         >
           {busy ? <Spinner size={12} /> : <Trash2 size={14} />}
-          Delete network
+          Delete now
         </Button>
       </DialogActions>
     </Dialog>

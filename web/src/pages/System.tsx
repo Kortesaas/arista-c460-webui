@@ -5,6 +5,7 @@ import { LoadingState } from '@/components/Loading'
 import { DisplaySettingsPanel, MaintenancePanel } from '@/components/SystemSettings'
 import { RefreshPanel } from '@/components/RefreshSettings'
 import { BackupPanel } from '@/components/Backup'
+import { ViewerPanel } from '@/components/ViewerAccount'
 import { Meter } from '@/components/status'
 import { cn } from '@/ui/cn'
 import { api } from '@/api'
@@ -13,6 +14,7 @@ import { Button, Field, HelpTip, Input, Panel, Spinner } from '@/ui/kit'
 import { formatBytes, formatDuration } from '@/utils/format'
 
 export function SystemPage() {
+  const isAdmin = useApp((store) => store.role === 'admin')
   const state = useApp((store) => store.state)
   if (!state) return <LoadingState />
   const { device, hardware } = state
@@ -74,7 +76,8 @@ export function SystemPage() {
         <div className="space-y-3">
           <MaintenancePanel state={state} />
           <BackupPanel />
-          <PasswordPanel />
+          {isAdmin && <PasswordPanel />}
+          <ViewerPanel />
         </div>
         <div className="space-y-3">
           <DisplaySettingsPanel state={state} />

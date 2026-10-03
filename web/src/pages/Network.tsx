@@ -3,6 +3,7 @@ import { LoadingState } from '@/components/Loading'
 import { ManagementPanel } from '@/components/SystemSettings'
 import { LldpPanel } from '@/components/LldpSettings'
 import { SnmpPanel } from '@/components/SnmpSettings'
+import { MetricsPanel } from '@/components/MetricsSettings'
 import { TimePanel } from '@/components/TimeSettings'
 import { PortCards } from '@/components/Ports'
 import { useApp } from '@/stores/app'
@@ -19,6 +20,7 @@ export function NetworkPage() {
           <ManagementPanel state={state} />
           <TimePanel />
           <SnmpPanel />
+          <MetricsPanel />
         </div>
         <div className="space-y-3">
           <Panel

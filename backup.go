@@ -140,7 +140,7 @@ func (a *API) createBackup(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "the passphrase must have at least 8 characters")
 		return
 	}
-	st := a.poller.Snapshot()
+	st := a.snapshot()
 	if st.GeneratedAt.IsZero() {
 		fail(w, http.StatusServiceUnavailable, "The AP configuration has not been read yet. Try again in a few seconds.")
 		return
@@ -209,6 +209,7 @@ type restorePlan struct {
 	management *ManagementRequest
 	comm       string
 	steps      []string
+	ssids      []ssidChange // mixed-mode bookkeeping after the transaction
 }
 
 // planRestore validates the whole request before anything is changed.
@@ -244,6 +245,7 @@ func (a *API) planRestore(req restoreRequest) (*restorePlan, error) {
 				return nil, fmt.Errorf("SSID %q: %w", s.Name, err)
 			}
 			entries = append(entries, map[string]any{"name": s.Name, "config": cfg})
+			plan.ssids = append(plan.ssids, ssidChange{oldName: s.Name, newName: s.Name, mixed: s.OpMode == opModeMixed})
 			if exists {
 				for _, leaf := range leaves {
 					plan.deletes = append(plan.deletes, a.ssidLeaf(s.Name, leaf))
@@ -254,6 +256,7 @@ func (a *API) planRestore(req restoreRequest) (*restorePlan, error) {
 			for _, s := range a.poller.Snapshot().SSIDs {
 				if !names[s.Name] {
 					plan.deletes = append(plan.deletes, a.gnmi.apPath(elem("ssids"), elem("ssid", "name", s.Name)))
+					plan.ssids = append(plan.ssids, ssidChange{oldName: s.Name})
 				}
 			}
 		}
@@ -355,6 +358,9 @@ func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		applied = append(applied, plan.steps...)
+		for _, change := range plan.ssids {
+			a.recordMixed(change)
+		}
 		a.poller.Refresh()
 	}
 	b := req.Backup

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { api, ApiError } from '@/api'
-import type { ApState } from '@/types'
+import type { ApState, Role } from '@/types'
 
 export type Connection = 'connecting' | 'live' | 'reconnecting' | 'offline'
 export type Auth = 'unknown' | 'signed-out' | 'signed-in'
@@ -15,6 +15,9 @@ interface AppStore {
   auth: Auth
   configured: boolean
   username: string
+  role: Role
+  /** Read-only account name; administrators only. */
+  viewer: string
   state: ApState | null
   connection: Connection
   error: string | null
@@ -25,6 +28,7 @@ interface AppStore {
   signIn: (username: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   toast: (text: string, tone?: Toast['tone']) => void
+  setViewer: (viewer: string) => void
   /** Runs a configuration change, reports the outcome and refreshes state. */
   change: (label: string, run: () => Promise<unknown>) => Promise<boolean>
 }
@@ -38,6 +42,8 @@ export const useApp = create<AppStore>((set, get) => ({
   auth: 'unknown',
   configured: true,
   username: '',
+  role: '',
+  viewer: '',
   state: null,
   connection: 'connecting',
   error: null,
@@ -76,7 +82,7 @@ export const useApp = create<AppStore>((set, get) => ({
       .session()
       .then((session) => {
         if (stopped) return
-        set({ auth: session.authenticated ? 'signed-in' : 'signed-out', configured: session.configured, username: session.username })
+        set({ auth: session.authenticated ? 'signed-in' : 'signed-out', configured: session.configured, username: session.username, role: session.role, viewer: session.viewer ?? '' })
         void loop()
       })
       .catch((error: unknown) => {
@@ -128,19 +134,22 @@ export const useApp = create<AppStore>((set, get) => ({
   },
 
   signIn: async (username, password) => {
-    await api.login(username, password)
+    const { role } = await api.login(username, password)
     sessionGeneration++
     stateRequest = null
-    set({ auth: 'signed-in', connection: 'connecting', username })
+    set({ auth: 'signed-in', connection: 'connecting', username, role })
+    void api.session().then((session) => set({ viewer: session.viewer ?? '' })).catch(() => undefined)
     await get().refresh()
   },
 
   signOut: async () => {
     sessionGeneration++
     stateRequest = null
-    set({ auth: 'signed-out', state: null, username: '' })
+    set({ auth: 'signed-out', state: null, username: '', role: '', viewer: '' })
     await api.logout().catch(() => undefined)
   },
+
+  setViewer: (viewer) => set({ viewer }),
 
   toast: (text, tone = 'ok') => {
     const id = ++toastId

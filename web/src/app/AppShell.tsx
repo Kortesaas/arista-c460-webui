@@ -3,7 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { Antenna, Activity, Cable, Gauge, History, LogOut, Menu, Monitor, Moon, PanelLeft, Radar, RefreshCw, Server, Sun, Users, Wifi } from 'lucide-react'
 import { cn } from '@/ui/cn'
 import { Brand } from '@/ui/Brand'
-import { Badge } from '@/ui/kit'
+import { Badge, ReadOnlyContext } from '@/ui/kit'
+import { StagedBar } from '@/components/StagedChanges'
 import { useApp, type Connection } from '@/stores/app'
 import { useThemeStore, type Theme } from '@/stores/theme'
 import { Age } from '@/components/status'
@@ -112,7 +113,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const location = useLocation()
-  const { state, connection, refresh, signOut } = useApp()
+  const { state, connection, refresh, signOut, role, username } = useApp()
+  const readOnly = role === 'viewer'
 
   useEffect(() => {
     try {
@@ -147,6 +149,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="ml-auto flex items-center gap-1.5">
           {connection !== 'live' && <Badge tone={connection === 'offline' ? 'danger' : 'warn'}>{connectionLabel[connection].label}</Badge>}
+          {readOnly && (
+            <span title="This account can look at everything but cannot change settings." className="rounded-sm border border-white/30 px-1.5 text-2xs font-semibold uppercase leading-5 tracking-wider text-white/90">
+              Read-only
+            </span>
+          )}
+          {username && <span className="hidden max-w-[10rem] truncate text-[12px] text-white/70 md:inline">{username}</span>}
           <button
             type="button"
             onClick={() => {
@@ -230,7 +238,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         {state?.error && (
           <div className="shrink-0 border-b border-line bg-warn-soft px-3 py-1.5 text-[12px] leading-4 text-warn">{state.error} — showing the last known values.</div>
         )}
-        <main className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">{children}</main>
+        <ReadOnlyContext.Provider value={readOnly}>
+          <main className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">{children}</main>
+          {!readOnly && <StagedBar />}
+        </ReadOnlyContext.Provider>
       </div>
       </div>
     </div>

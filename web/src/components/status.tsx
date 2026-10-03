@@ -37,6 +37,7 @@ export function Stat({ label, value, detail, tone = 'neutral', icon }: { label: 
 }
 
 const bandVar: Record<Band, string> = { '2.4': 'band-24', '5': 'band-5', '6': 'band-6' }
+export const bandColor = (band: Band) => `var(--${bandVar[band]})`
 
 export function BandChip({ band, muted }: { band: Band | ''; muted?: boolean }) {
   if (!band) return <span className="text-faint">—</span>

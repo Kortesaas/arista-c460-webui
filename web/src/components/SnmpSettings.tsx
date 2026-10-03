@@ -23,7 +23,7 @@ export function SnmpPanel() {
       title="Monitoring · SNMP"
       help="Lets network monitors poll this AP like a switch: name, uptime, location and both Ethernet ports with traffic counters (MIB-II system, ifTable and ifXTable). Read-only over SNMP v1 and v2c on UDP port 161; nothing can be changed through SNMP."
       actions={
-        <Button size="sm" disabled={!status} onClick={() => setEditing(true)}>
+        <Button size="sm" write disabled={!status} onClick={() => setEditing(true)}>
           <Pencil size={12} /> Edit
         </Button>
       }

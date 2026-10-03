@@ -1,7 +1,7 @@
 // Mirrors the JSON produced by the Go backend (state.go / system.go).
 
 export type Band = '2.4' | '5' | '6'
-export type OpMode = 'WPA3_SAE' | 'WPA2_PERSONAL' | 'ENHANCED_OPEN' | 'OPEN' | string
+export type OpMode = 'WPA3_SAE' | 'WPA2_WPA3_PERSONAL' | 'WPA2_PERSONAL' | 'ENHANCED_OPEN' | 'OPEN' | string
 
 export interface Device {
   hostname: string
@@ -66,6 +66,8 @@ export interface Ssid {
   isolation: boolean
   mfp: boolean
   hasPassword: boolean
+  /** WPA2/WPA3 mixed only: 'applied', 'pending' or a problem description. */
+  mixedStatus?: string
   bssids: Bssid[]
   clients: number
   rxBytes: number
@@ -139,6 +141,35 @@ export interface ApState {
   management: Management
   hardware: HardwareInfo
   managementError?: string
+  health: HealthItem[]
+  timeZone: string
+  schedules: Record<string, ScheduleStatus> | null
+}
+
+export interface HealthItem {
+  id: string
+  severity: 'danger' | 'warn' | 'info'
+  title: string
+  detail: string
+  link?: string
+}
+
+export interface ScheduleWindow {
+  /** 0 = Sunday … 6 = Saturday */
+  days: number[]
+  start: string
+  end: string
+}
+
+export interface SsidSchedule {
+  enabled: boolean
+  windows: ScheduleWindow[]
+}
+
+export interface ScheduleStatus extends SsidSchedule {
+  active: boolean
+  next?: string
+  waiting?: string
 }
 
 export interface Management {
@@ -305,3 +336,61 @@ export interface SnmpStatus extends SnmpSettings {
   running: boolean
   error?: string
 }
+
+export type Role = 'admin' | 'viewer' | ''
+
+export interface Session {
+  authenticated: boolean
+  configured: boolean
+  username: string
+  role: Role
+  /** Read-only account name, only reported to administrators. */
+  viewer?: string
+}
+
+export interface HistoryPoint {
+  t: number
+  clients: number
+  perSsid: Record<string, number>
+  util: Record<string, number>
+  rxBps: number | null
+  txBps: number | null
+  tempC: number | null
+}
+
+export interface ClientSample {
+  t: number
+  rssi: number | null
+  band: Band | ''
+  ssid: string
+  txRate: number | null
+  rxRate: number | null
+}
+
+export interface ChangeEntry {
+  time: string
+  user: string
+  address: string
+  action: string
+  ok: boolean
+  error?: string
+}
+
+export interface MetricsSettings {
+  enabled: boolean
+  token: string
+}
+
+export interface JoinCode {
+  ssid: string
+  opmode: OpMode
+  password: string
+  hidden: boolean
+  payload: string
+}
+
+export type StagedChange =
+  | { kind: 'ssid-create'; ssid: SsidInput }
+  | { kind: 'ssid-update'; name: string; ssid: SsidInput }
+  | { kind: 'ssid-delete'; name: string }
+  | { kind: 'radio'; id: number; radio: RadioInput }

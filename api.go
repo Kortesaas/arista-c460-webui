@@ -26,60 +26,85 @@ type API struct {
 	poller  *Poller
 	writeMu sync.Mutex // one configuration change at a time
 
-	cli          *CLIInfo
-	snmp         *SNMPAgent
-	cliTrigger   chan struct{}
-	stage        func(ManagementRequest, string) error // nil uses native management configuration files
-	wirelessDir  string                                // empty uses the firmware socket directory; overridden only in tests
-	networkMu    sync.Mutex
-	networkCache *NetworkSnapshot
-	eventMu      sync.Mutex
-	eventCache   *WirelessEventLog
-	diagnosticMu sync.Mutex // bounded native diagnostics, independent of configuration writes
+	cli             *CLIInfo
+	snmp            *SNMPAgent
+	changes         *ChangeLog
+	history         *History
+	overrides       *WirelessOverrides
+	scheduler       Scheduler
+	defaultPassword defaultPasswordCheck
+	cliTrigger      chan struct{}
+	stage           func(ManagementRequest, string) error // nil uses native management configuration files
+	wirelessDir     string                                // empty uses the firmware socket directory; overridden only in tests
+	networkMu       sync.Mutex
+	networkCache    *NetworkSnapshot
+	eventMu         sync.Mutex
+	eventCache      *WirelessEventLog
+	diagnosticMu    sync.Mutex // bounded native diagnostics, independent of configuration writes
 }
 
 func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/session", a.session)
 	mux.HandleFunc("POST /api/login", a.login)
 	mux.HandleFunc("POST /api/logout", a.logout)
-	mux.Handle("POST /api/password", a.protect(a.changePassword))
-	mux.Handle("GET /api/state", a.protect(a.state))
-	mux.Handle("PUT /api/refresh", a.protect(a.updateRefresh))
-	mux.Handle("GET /api/network", a.protect(a.networkStatus))
-	mux.Handle("GET /api/events", a.protect(a.wirelessEvents))
-	mux.Handle("POST /api/ssids", a.protect(a.createSSID))
-	mux.Handle("GET /api/ssids/{name}/features", a.protect(a.getSSIDFeatures))
-	mux.Handle("PUT /api/ssids/{name}/features", a.protect(a.updateSSIDFeatures))
-	mux.Handle("GET /api/lldp", a.protect(a.getLLDP))
-	mux.Handle("PUT /api/lldp", a.protect(a.updateLLDP))
-	mux.Handle("PUT /api/ssids/{name}", a.protect(a.updateSSID))
-	mux.Handle("DELETE /api/ssids/{name}", a.protect(a.deleteSSID))
-	mux.Handle("PUT /api/radios/{id}", a.protect(a.updateRadio))
-	mux.Handle("PUT /api/management", a.protect(a.updateManagement))
-	mux.Handle("GET /api/trust", a.protect(a.trust))
-	mux.Handle("POST /api/reboot", a.protect(a.reboot))
-	mux.Handle("POST /api/locate", a.protect(a.locate))
-	mux.Handle("DELETE /api/locate", a.protect(a.stopLocate))
-	mux.Handle("PUT /api/settings", a.protect(a.updateSettings))
-	mux.Handle("PUT /api/ssh", a.protect(a.updateSSH))
-	mux.Handle("POST /api/backup", a.protect(a.createBackup))
-	mux.Handle("POST /api/restore", a.protect(a.restoreBackup))
-	mux.Handle("GET /api/snmp", a.protect(a.snmpSettings))
-	mux.Handle("PUT /api/snmp", a.protect(a.updateSNMP))
-	mux.Handle("GET /api/time", a.protect(a.timeSettings))
-	mux.Handle("PUT /api/time", a.protect(a.updateTime))
-	mux.Handle("POST /api/diagnostics", a.protect(a.diagnose))
-	mux.Handle("GET /api/wireless-status", a.protect(a.wirelessStatus))
-	mux.Handle("GET /api/clients/{mac}/details", a.protect(a.clientDetails))
-	mux.Handle("POST /api/clients/{mac}/reconnect", a.protect(a.reconnectClient))
+
+	// Read access, also for the read-only account.
+	mux.Handle("GET /api/state", a.read(a.state))
+	mux.Handle("GET /api/network", a.read(a.networkStatus))
+	mux.Handle("GET /api/events", a.read(a.wirelessEvents))
+	mux.Handle("GET /api/changes", a.read(a.changeLog))
+	mux.Handle("GET /api/history", a.read(a.historyHandler))
+	mux.Handle("GET /api/clients/{mac}/history", a.read(a.clientHistory))
+	mux.Handle("GET /api/ssids/{name}/features", a.read(a.getSSIDFeatures))
+	mux.Handle("GET /api/lldp", a.read(a.getLLDP))
+	mux.Handle("GET /api/trust", a.read(a.trust))
+	mux.Handle("GET /api/snmp", a.read(a.snmpSettings))
+	mux.Handle("GET /api/metrics", a.read(a.metricsSettings))
+	mux.Handle("GET /api/time", a.read(a.timeSettings))
+	mux.Handle("GET /api/wireless-status", a.read(a.wirelessStatus))
+	mux.Handle("GET /api/clients/{mac}/details", a.read(a.clientDetails))
+	mux.Handle("POST /api/diagnostics", a.read(a.diagnose)) // tests only observe
+
+	// Changes, administrator only; each one is written to the change log.
+	mux.Handle("POST /api/password", a.write(a.changePassword))
+	mux.Handle("PUT /api/viewer", a.write(a.setViewer))
+	mux.Handle("DELETE /api/viewer", a.write(a.removeViewer))
+	mux.Handle("PUT /api/refresh", a.write(a.updateRefresh))
+	mux.Handle("POST /api/ssids", a.write(a.createSSID))
+	mux.Handle("PUT /api/ssids/{name}", a.write(a.updateSSID))
+	mux.Handle("DELETE /api/ssids/{name}", a.write(a.deleteSSID))
+	mux.Handle("PUT /api/ssids/{name}/features", a.write(a.updateSSIDFeatures))
+	mux.Handle("PUT /api/ssids/{name}/schedule", a.write(a.updateSchedule))
+	mux.Handle("GET /api/ssids/{name}/join", a.write(a.joinCode)) // reveals the password
+	mux.Handle("PUT /api/radios/{id}", a.write(a.updateRadio))
+	mux.Handle("POST /api/batch", a.write(a.applyBatch))
+	mux.Handle("PUT /api/management", a.write(a.updateManagement))
+	mux.Handle("PUT /api/lldp", a.write(a.updateLLDP))
+	mux.Handle("PUT /api/time", a.write(a.updateTime))
+	mux.Handle("PUT /api/timezone", a.write(a.updateTimeZone))
+	mux.Handle("PUT /api/snmp", a.write(a.updateSNMP))
+	mux.Handle("PUT /api/metrics", a.write(a.updateMetrics))
+	mux.Handle("PUT /api/settings", a.write(a.updateSettings))
+	mux.Handle("PUT /api/ssh", a.write(a.updateSSH))
+	mux.Handle("POST /api/reboot", a.write(a.reboot))
+	mux.Handle("POST /api/locate", a.write(a.locate))
+	mux.Handle("DELETE /api/locate", a.write(a.stopLocate))
+	mux.Handle("POST /api/backup", a.write(a.createBackup))
+	mux.Handle("POST /api/restore", a.write(a.restoreBackup))
+	mux.Handle("POST /api/clients/{mac}/reconnect", a.write(a.reconnectClient))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { fail(w, http.StatusNotFound, "unknown endpoint") })
 }
 
-// protect requires a session; mutating requests must also be JSON, which a
-// cross-site form cannot send without a CORS preflight.
-func (a *API) protect(h http.HandlerFunc) http.Handler {
+func (a *API) read(h http.HandlerFunc) http.Handler  { return a.guard(h, false) }
+func (a *API) write(h http.HandlerFunc) http.Handler { return a.guard(h, true) }
+
+// guard requires a session; mutating requests must also be JSON, which a
+// cross-site form cannot send without a CORS preflight. Administrator-only
+// handlers are refused for the read-only account and recorded in the change log.
+func (a *API) guard(h http.HandlerFunc, admin bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !a.auth.Valid(r) {
+		s, ok := a.auth.Session(r)
+		if !ok {
 			fail(w, http.StatusUnauthorized, "not signed in")
 			return
 		}
@@ -93,8 +118,34 @@ func (a *API) protect(h http.HandlerFunc) http.Handler {
 			fail(w, http.StatusForbidden, "missing X-Requested-With header")
 			return
 		}
-		h(w, r)
+		if !admin {
+			h(w, r)
+			return
+		}
+		if s.Role != RoleAdmin {
+			fail(w, http.StatusForbidden, "This account is read-only.")
+			return
+		}
+		// Describe before running, while the current state is still the old one.
+		action := a.describeChange(r, requestFields(r))
+		rec := &recorder{ResponseWriter: w}
+		h(rec, r)
+		entry := ChangeEntry{Time: time.Now(), User: s.User, Address: clientIP(r), Action: action, OK: rec.status < 400}
+		if !entry.OK {
+			var body struct {
+				Error string `json:"error"`
+			}
+			_ = json.Unmarshal(rec.body.Bytes(), &body)
+			entry.Error = body.Error
+		}
+		a.changes.Record(entry)
 	})
+}
+
+// isAdmin reports whether the caller may see secrets such as communities.
+func (a *API) isAdmin(r *http.Request) bool {
+	s, ok := a.auth.Session(r)
+	return ok && s.Role == RoleAdmin
 }
 
 func reply(w http.ResponseWriter, code int, v any) {
@@ -122,15 +173,12 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 // ---------------------------------------------------------------- session
 
 func (a *API) session(w http.ResponseWriter, r *http.Request) {
-	reply(w, http.StatusOK, map[string]any{"authenticated": a.auth.Valid(r), "configured": a.auth.Configured(), "username": a.sessionUser(r)})
-}
-
-// sessionUser exposes the login name only to signed-in callers.
-func (a *API) sessionUser(r *http.Request) string {
-	if a.auth.Valid(r) {
-		return a.auth.Username()
+	s, ok := a.auth.Session(r)
+	out := map[string]any{"authenticated": ok, "configured": a.auth.Configured(), "username": s.User, "role": s.Role}
+	if ok && s.Role == RoleAdmin {
+		out["viewer"] = a.auth.ViewerName()
 	}
-	return ""
+	reply(w, http.StatusOK, out)
 }
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +189,8 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := a.auth.Check(r, body.Username, body.Password); err != nil {
+	role, err := a.auth.Check(r, body.Username, body.Password)
+	if err != nil {
 		code := http.StatusUnauthorized
 		if errors.Is(err, errTooManyAttempts) {
 			code = http.StatusTooManyRequests
@@ -149,11 +198,11 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		fail(w, code, err.Error())
 		return
 	}
-	if err := a.auth.NewSession(w); err != nil {
+	if err := a.auth.NewSession(w, body.Username, role); err != nil {
 		fail(w, http.StatusInternalServerError, "could not create session")
 		return
 	}
-	reply(w, http.StatusOK, map[string]bool{"authenticated": true})
+	reply(w, http.StatusOK, map[string]any{"authenticated": true, "role": role})
 }
 
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
@@ -171,7 +220,10 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := a.auth.Username()
-	if err := a.auth.Check(r, user, body.Current); err != nil {
+	if role, err := a.auth.Check(r, user, body.Current); err != nil || role != RoleAdmin {
+		if err == nil {
+			err = errBadPassword
+		}
 		fail(w, http.StatusForbidden, "current password: "+err.Error())
 		return
 	}
@@ -187,16 +239,46 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	reply(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+func (a *API) setViewer(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := a.auth.SetViewer(strings.TrimSpace(body.Username), body.Password); err != nil {
+		fail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	reply(w, http.StatusOK, map[string]any{"ok": true, "viewer": a.auth.ViewerName()})
+}
+
+func (a *API) removeViewer(w http.ResponseWriter, r *http.Request) {
+	if err := a.auth.RemoveViewer(); err != nil {
+		fail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	reply(w, http.StatusOK, map[string]any{"ok": true, "viewer": ""})
+}
+
 type stateResponse struct {
 	APState
-	Management      Management   `json:"management"`
-	Hardware        HardwareInfo `json:"hardware"`
-	ManagementError string       `json:"managementError,omitempty"`
+	Management      Management                `json:"management"`
+	Hardware        HardwareInfo              `json:"hardware"`
+	ManagementError string                    `json:"managementError,omitempty"`
+	Health          []HealthItem              `json:"health"`
+	TimeZone        string                    `json:"timeZone"`
+	Schedules       map[string]ScheduleStatus `json:"schedules"`
 }
 
 func (a *API) state(w http.ResponseWriter, r *http.Request) {
 	mgmt, hw, err := a.cli.Snapshot()
-	reply(w, http.StatusOK, stateResponse{APState: a.poller.Snapshot(), Management: mgmt, Hardware: hw, ManagementError: err})
+	resp := stateResponse{APState: a.snapshot(), Management: mgmt, Hardware: hw, ManagementError: err}
+	resp.Health = a.healthChecks(resp)
+	resp.TimeZone = a.cfg.Zone().String()
+	resp.Schedules = a.scheduleStatuses()
+	reply(w, http.StatusOK, resp)
 }
 
 func (a *API) refreshCLI() {
@@ -219,7 +301,12 @@ type ssidRequest struct {
 	Isolation bool     `json:"isolation"`
 }
 
-var opModes = []string{"WPA3_SAE", "WPA2_PERSONAL", "ENHANCED_OPEN", "OPEN"}
+var opModes = []string{"WPA3_SAE", opModeMixed, "WPA2_PERSONAL", "ENHANCED_OPEN", "OPEN"}
+
+// needsPassword reports whether a security mode uses a pre-shared password.
+func needsPassword(opmode string) bool {
+	return opmode == "WPA3_SAE" || opmode == opModeMixed || opmode == "WPA2_PERSONAL"
+}
 
 func validSSIDName(name string) error {
 	if name == "" || len(name) > 32 {
@@ -250,7 +337,16 @@ func ssidConfig(req ssidRequest, current map[string]any) (map[string]any, []stri
 		return nil, nil, errors.New("select at least one valid band (2.4, 5, 6 GHz)")
 	}
 	if slices.Contains(req.Bands, "6") && req.OpMode != "WPA3_SAE" && req.OpMode != "ENHANCED_OPEN" {
+		if req.OpMode == opModeMixed {
+			return nil, nil, errors.New("WPA2/WPA3 mixed works on 2.4 and 5 GHz; 6 GHz requires WPA3 only")
+		}
 		return nil, nil, errors.New("6 GHz requires WPA3 Personal or Enhanced Open (OWE)")
+	}
+	// Mixed networks are WPA3 in OpenConfig; the native section is switched
+	// to transition mode afterwards (see mixed.go).
+	native := req.OpMode
+	if native == opModeMixed {
+		native = "WPA3_SAE"
 	}
 	if req.VLAN != nil && (*req.VLAN < 1 || *req.VLAN > 4094) {
 		return nil, nil, errors.New("VLAN must be 1–4094, or empty for untagged")
@@ -262,10 +358,10 @@ func ssidConfig(req ssidRequest, current map[string]any) (map[string]any, []stri
 	cfg["name"] = req.Name
 	cfg["enabled"] = req.Enabled
 	cfg["hidden"] = req.Hidden
-	cfg["opmode"] = req.OpMode
+	cfg["opmode"] = native
 	cfg["operating-frequency"] = freq
 	cfg["station-isolation"] = req.Isolation
-	cfg["mfp"] = req.OpMode == "WPA3_SAE" || req.OpMode == "ENHANCED_OPEN"
+	cfg["mfp"] = native == "WPA3_SAE" || native == "ENHANCED_OPEN"
 	if _, ok := cfg["dva"]; !ok {
 		cfg["dva"] = false
 	}
@@ -277,7 +373,7 @@ func ssidConfig(req ssidRequest, current map[string]any) (map[string]any, []stri
 		password = existing
 	}
 	keep := map[string]bool{}
-	switch req.OpMode {
+	switch native {
 	case "WPA3_SAE":
 		keep["wpa3-psk"] = true
 	case "WPA2_PERSONAL":
@@ -328,6 +424,98 @@ func (a *API) apply(w http.ResponseWriter, r *http.Request, what string, body ma
 	reply(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// ssidChange is one validated SSID operation, ready to be sent alone or in a batch.
+type ssidChange struct {
+	entry   map[string]any // OpenConfig list entry; nil for a deletion
+	deletes []*gpb.Path
+	oldName string // "" for a new SSID
+	newName string // "" for a deletion
+	mixed   bool
+}
+
+type httpError struct {
+	code int
+	msg  string
+}
+
+func (e httpError) Error() string { return e.msg }
+
+func (a *API) planCreateSSID(req ssidRequest) (ssidChange, error) {
+	if _, exists := a.poller.SSIDConfig(req.Name); exists {
+		return ssidChange{}, httpError{http.StatusConflict, fmt.Sprintf("a network named %q already exists", req.Name)}
+	}
+	if req.Password == "" && needsPassword(req.OpMode) {
+		return ssidChange{}, httpError{http.StatusBadRequest, "a password is required"}
+	}
+	cfg, _, err := ssidConfig(req, nil)
+	if err != nil {
+		return ssidChange{}, httpError{http.StatusBadRequest, err.Error()}
+	}
+	return ssidChange{entry: map[string]any{"name": req.Name, "config": cfg}, newName: req.Name, mixed: req.OpMode == opModeMixed}, nil
+}
+
+func (a *API) planUpdateSSID(name string, req ssidRequest) (ssidChange, error) {
+	current, ok := a.poller.SSIDConfig(name)
+	if !ok {
+		return ssidChange{}, httpError{http.StatusNotFound, fmt.Sprintf("network %q not found", name)}
+	}
+	renamed := req.Name != name
+	if renamed {
+		if _, exists := a.poller.SSIDConfig(req.Name); exists {
+			return ssidChange{}, httpError{http.StatusConflict, fmt.Sprintf("a network named %q already exists", req.Name)}
+		}
+	}
+	cfg, leaves, err := ssidConfig(req, current)
+	if err != nil {
+		return ssidChange{}, httpError{http.StatusBadRequest, err.Error()}
+	}
+	change := ssidChange{entry: map[string]any{"name": req.Name, "config": cfg}, oldName: name, newName: req.Name, mixed: req.OpMode == opModeMixed}
+	if renamed {
+		// The name is the list key: replace the entry.
+		change.deletes = append(change.deletes, a.gnmi.apPath(elem("ssids"), elem("ssid", "name", name)))
+	} else {
+		for _, leaf := range leaves {
+			change.deletes = append(change.deletes, a.ssidLeaf(name, leaf))
+		}
+	}
+	return change, nil
+}
+
+func (a *API) planDeleteSSID(name string) (ssidChange, error) {
+	if _, ok := a.poller.SSIDConfig(name); !ok {
+		return ssidChange{}, httpError{http.StatusNotFound, fmt.Sprintf("network %q not found", name)}
+	}
+	return ssidChange{deletes: []*gpb.Path{a.gnmi.apPath(elem("ssids"), elem("ssid", "name", name))}, oldName: name}, nil
+}
+
+// applySSID sends one SSID change and records its mixed-mode state.
+func (a *API) applySSID(w http.ResponseWriter, r *http.Request, what string, change ssidChange, err error) {
+	if err != nil {
+		var he httpError
+		if errors.As(err, &he) {
+			fail(w, he.code, he.msg)
+		} else {
+			fail(w, http.StatusBadRequest, err.Error())
+		}
+		return
+	}
+	body := map[string]any{}
+	if change.entry != nil {
+		body["ssids"] = map[string]any{"ssid": []any{change.entry}}
+	}
+	rec := &recorder{ResponseWriter: w}
+	a.apply(rec, r, what, body, change.deletes)
+	if rec.status < 400 {
+		a.recordMixed(change)
+	}
+}
+
+func (a *API) recordMixed(change ssidChange) {
+	if err := a.overrides.Update(change.oldName, change.newName, change.mixed); err != nil {
+		log.Printf("mixed mode: could not save: %v", err)
+	}
+}
+
 func (a *API) createSSID(w http.ResponseWriter, r *http.Request) {
 	var req ssidRequest
 	if !decode(w, r, &req) {
@@ -335,20 +523,8 @@ func (a *API) createSSID(w http.ResponseWriter, r *http.Request) {
 	}
 	a.writeMu.Lock()
 	defer a.writeMu.Unlock()
-	if _, exists := a.poller.SSIDConfig(req.Name); exists {
-		fail(w, http.StatusConflict, "an SSID with this name already exists")
-		return
-	}
-	if req.Password == "" && (req.OpMode == "WPA3_SAE" || req.OpMode == "WPA2_PERSONAL") {
-		fail(w, http.StatusBadRequest, "a password is required")
-		return
-	}
-	cfg, _, err := ssidConfig(req, nil)
-	if err != nil {
-		fail(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	a.apply(w, r, "create SSID "+req.Name, ssidBody(cfg), nil)
+	change, err := a.planCreateSSID(req)
+	a.applySSID(w, r, "create SSID "+req.Name, change, err)
 }
 
 func (a *API) updateSSID(w http.ResponseWriter, r *http.Request) {
@@ -359,44 +535,22 @@ func (a *API) updateSSID(w http.ResponseWriter, r *http.Request) {
 	}
 	a.writeMu.Lock()
 	defer a.writeMu.Unlock()
-	current, ok := a.poller.SSIDConfig(name)
-	if !ok {
-		fail(w, http.StatusNotFound, "SSID not found")
-		return
+	change, err := a.planUpdateSSID(name, req)
+	a.applySSID(w, r, "update SSID "+name, change, err)
+	if err == nil && name != req.Name {
+		a.renameSchedule(name, req.Name)
 	}
-	renamed := req.Name != name
-	if renamed {
-		if _, exists := a.poller.SSIDConfig(req.Name); exists {
-			fail(w, http.StatusConflict, "an SSID with this name already exists")
-			return
-		}
-	}
-	cfg, leaves, err := ssidConfig(req, current)
-	if err != nil {
-		fail(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	var deletes []*gpb.Path
-	if renamed {
-		// The name is the list key: replace the entry.
-		deletes = append(deletes, a.gnmi.apPath(elem("ssids"), elem("ssid", "name", name)))
-	} else {
-		for _, leaf := range leaves {
-			deletes = append(deletes, a.ssidLeaf(name, leaf))
-		}
-	}
-	a.apply(w, r, "update SSID "+name, ssidBody(cfg), deletes)
 }
 
 func (a *API) deleteSSID(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	a.writeMu.Lock()
 	defer a.writeMu.Unlock()
-	if _, ok := a.poller.SSIDConfig(name); !ok {
-		fail(w, http.StatusNotFound, "SSID not found")
-		return
+	change, err := a.planDeleteSSID(name)
+	a.applySSID(w, r, "delete SSID "+name, change, err)
+	if err == nil {
+		a.renameSchedule(name, "")
 	}
-	a.apply(w, r, "delete SSID "+name, map[string]any{}, []*gpb.Path{a.gnmi.apPath(elem("ssids"), elem("ssid", "name", name))})
 }
 
 // ----------------------------------------------------------------- radios

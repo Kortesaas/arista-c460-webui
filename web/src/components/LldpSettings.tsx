@@ -33,7 +33,7 @@ export function LldpPanel() {
           <Button size="sm" disabled={loading} aria-label="Refresh LLDP" onClick={() => void load()}>
             {loading ? <Spinner size={12} /> : <RefreshCw size={12} />}
           </Button>
-          <Button size="sm" disabled={!settings || loading || Boolean(error)} onClick={() => setEditing(true)}>
+          <Button size="sm" write disabled={!settings || loading || Boolean(error)} onClick={() => setEditing(true)}>
             <Pencil size={12} /> Edit
           </Button>
         </>

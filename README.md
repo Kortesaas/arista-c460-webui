@@ -8,20 +8,27 @@ The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance tha
 
 ## Features
 
-- **Overview:** health, clients, radios, uplink, temperature, memory, flash usage.
-- **Wireless networks (read/write):** create, edit and delete SSIDs: name, security (WPA3 Personal, WPA2 Personal, Enhanced Open, Open), password, bands (2.4/5/6 GHz), VLAN tag or untagged, client isolation, hidden, enabled.
+- **Overview:** status, automatic health checks (default password, clock sync, PoE class, temperature, missing backup uplink, busy channels, radar, weak clients, pending restarts, memory/flash), clients, radios, uplink, and history graphs.
+- **History:** clients per network, uplink traffic, channel utilisation and temperature, one point per minute for 24 hours, plus a two-hour signal and roaming track per client. Kept in fixed-size memory buffers (empty after a service restart).
+- **Wireless networks (read/write):** create, edit and delete SSIDs: name, security (WPA3 Personal, WPA2/WPA3 mixed, WPA2 Personal, Enhanced Open, Open), password, bands (2.4/5/6 GHz), VLAN tag or untagged, client isolation, hidden, enabled.
 - **Advanced wireless settings (read/write):** per-SSID 802.11k radio measurements and BSS-load advertising, with firmware-default choices and actual per-band driver readback.
 - **Switch discovery (read/write):** live LLDP neighbours and ports, advertisement interval and hold multiplier. Explicit timing settings are stored locally and restored if the daemon resets them.
-- **Radios (read/write):** channel (regulatory list, DFS marked), channel width, transmit power, automatic channel/power, enable/disable. It shows the effective EIRP, channel utilisation and noise floor.
+- **Radios (read/write):** channel (regulatory list, DFS marked), channel width, transmit power, automatic channel/power, enable/disable. It shows the effective EIRP, channel utilisation and noise floor, and suggests the quietest channel from the RF scan.
+- **Staged changes:** SSID and radio edits can be added to a pending list and applied in one transaction, so Wi-Fi restarts once.
+- **Join codes:** a QR code per network for joining with a phone camera, with a printable card (administrators only; each view is logged).
+- **Schedules:** broadcast a network only at certain times (per weekday, overnight windows allowed), evaluated in the configured time zone once the clock is synchronised. Manual changes last until the next scheduled change.
+- **WPA2/WPA3 mixed mode:** stored as WPA3 in OpenConfig; the service switches the firmware's native VAP section to transition mode through the firmware's own apply path (`handle_ap_conf.sh`), only after the firmware diff confirms that nothing else changes and no restart is needed, and re-applies it after other configuration changes. 2.4 and 5 GHz only. If the service stops, the network falls back to WPA3-only.
 - **Clients:** signal, SNR, rates, traffic, IPv4/IPv6 and hostname (including static IPv4 learned through ARP), plus live association details and a confirmed reconnect action. Reconnect briefly disconnects the station; it does not ban it.
 - **RF scan:** neighbouring access points with channel occupancy.
 - **Management network (read/write):** static IPv4 or DHCP client, subnet mask, gateway, up to three DNS servers, DNS search domain, and native/untagged or tagged management VLAN. Saved changes apply after an AP restart; the UI shows the destination address.
-- **Time synchronisation (read/write):** primary and secondary NTP servers, service and clock-sync status. Saves use the native encrypted configuration, with local desired settings restored when the WebUI service starts.
+- **Time synchronisation (read/write):** primary and secondary NTP servers (one click to use the router), time zone, service and clock-sync status. Saves use the native encrypted configuration, with local desired settings restored when the WebUI service starts.
 - **Diagnostics:** AP-side ping, DNS lookup, route tracing and TCP-port connectivity; VLAN/bridge paths, management routes and learned neighbours; searchable wireless connection, channel and radar events with text export; and live per-BSSID operating state. Tests have fixed time/output limits. Client details can prefill a connection test.
 - **System:** device/VLAN display names, SSH enable/disable, timed LED location, restart with firmware boot-trust checks, hardware/power/clock/LLDP information, Ethernet ports, and administrator username and password.
 - **Backup and restore:** download SSIDs, radios, management network, names, time servers and LLDP timing as a JSON file and apply it to the same or another C-460, choosing which parts to apply. Wi-Fi passwords are left out unless you set a passphrase; then they are encrypted with it (scrypt + AES-256-GCM). Management addresses are off by default when copying, so a second AP does not take over the first one's IP.
 - **SNMP monitoring (read-only):** optional SNMP v1/v2c agent on UDP 161 with MIB-II system group, ifTable and ifXTable (64-bit counters) for both Ethernet sockets. ifIndex 1/2 always means ETH 1/ETH 2. Community, location and contact are set under Network; writes are always refused.
 - **HTTPS:** served on port 443 with a self-signed certificate generated on first start, next to plain HTTP on port 80.
+- **Accounts and change log:** an administrator and an optional read-only account (sees everything, can run connection tests, cannot change settings or see passwords and tokens). Every change, including schedule actions, is logged with user, address and what changed; the AP keeps the newest 300 entries.
+- **Prometheus:** optional `/metrics` endpoint protected by a bearer token (clients, radios, Ethernet counters, temperature, health findings).
 - **Live updates:** shared AP sampling configurable from 1–60 seconds (default 5). Browsers follow that cadence, pause in background tabs, share pending requests and back off during an outage. Slow AP reads can extend the interval; detailed hardware information remains a separate, slower sample.
 - A small pirate hat spins continuously while the page starts and waits for AP data, including after a restart. Reduced-motion preferences are respected.
 - Light, dark and system themes; works on phones.
@@ -100,6 +107,10 @@ deploy/deploy.sh <ap> --check      # runs deploy/overlay-check.sh on the AP, rea
 | `vlanNames` | — | Optional VLAN id → name map |
 | `gnmi.username` / `gnmi.password` | — | OpenConfig API user (required) |
 | `gnmi.address` | `127.0.0.1:8080` | Agent address |
+| `metrics` | off | `enabled`, `token` for `/metrics`; editable under Network → Prometheus |
+| `timeZone` | `UTC` | IANA time zone for schedules |
+| `schedules` | — | Per-SSID broadcast schedules; editable under Wireless networks |
+| `changeLog` | `changes.json` next to the config | Change log file (newest 300 entries) |
 | `snmp` | off | `enabled`, `community`, `location`, `contact`; editable under Network → Monitoring. `listen` (default `:161`) is file-only |
 
 ## Security notes
