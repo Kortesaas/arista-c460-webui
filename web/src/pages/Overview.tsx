@@ -55,6 +55,7 @@ export function OverviewPage() {
           detail="hottest sensor"
           tone={device.temperatureC !== null && device.temperatureC > 85 ? 'danger' : device.temperatureC !== null && device.temperatureC > 75 ? 'warn' : 'neutral'}
           icon={<Thermometer size={13} />}
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 

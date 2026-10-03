@@ -279,6 +279,8 @@ export interface NetworkSnapshot {
 export interface WirelessEvent {
   id: string
   time: string
+  /** ISO timestamp; shown in the browser's local time like the change log. */
+  at?: string
   kind: string
   summary: string
   tone: string

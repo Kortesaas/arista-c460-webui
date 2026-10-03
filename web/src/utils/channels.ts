@@ -55,6 +55,8 @@ export function recommendChannel(radio: Radio, neighbors: Neighbor[], width = ra
     networks: best.n,
     currentScore: current.s,
     currentNetworks: current.n,
-    better: best.channel !== radio.channel && best.s + 1 <= current.s,
+    // Clearly better only: scans fluctuate, and advice that flips between
+    // refreshes is worse than none.
+    better: best.channel !== radio.channel && current.s - best.s >= 2 && best.s <= current.s * 0.75,
   }
 }

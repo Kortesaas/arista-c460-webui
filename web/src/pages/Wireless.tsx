@@ -53,6 +53,25 @@ export function WirelessPage() {
   if (!state) return <LoadingState />
   const pendingFor = (name: string) => staged.find((c) => changeTarget(c) === `ssid:${name}`)
   const stagedNew = staged.filter((c): c is Extract<StagedChange, { kind: 'ssid-create' }> => c.kind === 'ssid-create')
+  const actions = (ssid: Ssid) => (
+    <div className="flex justify-end gap-0.5">
+      <IconButton label={`Join code for ${ssid.name}`} write onClick={() => setJoining(ssid.name)}>
+        <QrCode size={14} />
+      </IconButton>
+      <IconButton label={`Schedule for ${ssid.name}`} write onClick={() => setScheduling(ssid.name)}>
+        <CalendarClock size={14} />
+      </IconButton>
+      <IconButton label={`Advanced settings for ${ssid.name}`} onClick={() => setAdvanced(ssid)}>
+        <SlidersHorizontal size={14} />
+      </IconButton>
+      <IconButton label={`Edit ${ssid.name}`} write onClick={() => setEditing(ssid)}>
+        <Pencil size={14} />
+      </IconButton>
+      <IconButton label={`Delete ${ssid.name}`} write onClick={() => setDeleting(ssid)} className="hover:text-danger">
+        <Trash2 size={14} />
+      </IconButton>
+    </div>
+  )
 
   return (
     <Page
@@ -74,7 +93,53 @@ export function WirelessPage() {
           />
         </Panel>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-line bg-surface">
+        <>
+        <ul className="space-y-2 md:hidden">
+          {state.ssids.map((ssid) => {
+            const pending = pendingFor(ssid.name)
+            const schedule = scheduleSummary(state.schedules?.[ssid.name], state.timeZone)
+            return (
+              <li key={ssid.name} className="rounded-lg border border-line bg-surface p-3">
+                <div className="flex items-start gap-2">
+                  <Dot tone={ssid.enabled ? 'ok' : 'neutral'} className="mt-1.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-[14px] font-semibold text-ink">{ssid.name}</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
+                      {opModeShort(ssid.opmode)}
+                      <MixedBadge ssid={ssid} />
+                      <span className="text-faint">·</span>
+                      {plural(ssid.clients, 'client')}
+                    </p>
+                  </div>
+                  <VlanChip vlan={ssid.vlan} />
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1">
+                  {ssid.bands.map((band) => (
+                    <BandChip key={band} band={band} />
+                  ))}
+                  {!ssid.enabled && <Badge>disabled</Badge>}
+                  {ssid.hidden && <Badge>hidden</Badge>}
+                  {ssid.isolation && <Badge tone="accent">isolated</Badge>}
+                  {pending && <Badge tone="accent">{pending.kind === 'ssid-delete' ? 'pending delete' : 'pending change'}</Badge>}
+                </div>
+                {schedule && (
+                  <button type="button" onClick={() => setScheduling(ssid.name)} className="mt-1.5 flex items-center gap-1 text-[11px] text-muted hover:text-accent-text">
+                    <CalendarClock size={11} /> {schedule}
+                  </button>
+                )}
+                <div className="mt-2 border-t border-line pt-1.5">{actions(ssid)}</div>
+              </li>
+            )
+          })}
+          {stagedNew.map((c) => (
+            <li key={`new-${c.ssid.name}`} className="flex items-center gap-2 rounded-lg border border-dashed border-accent bg-accent-soft px-3 py-2.5 text-[13px]">
+              <Plus size={13} className="text-accent-text" />
+              <span className="font-medium text-ink">{c.ssid.name}</span>
+              <Badge tone="accent">pending, new</Badge>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto rounded-lg border border-line bg-surface md:block">
           <table className="w-full min-w-[760px] text-left text-[13px]">
             <thead className="border-b border-line text-2xs font-semibold uppercase tracking-wider text-faint">
               <tr>
@@ -135,23 +200,7 @@ export function WirelessPage() {
                     ↓ {formatBytes(ssid.rxBytes)} · ↑ {formatBytes(ssid.txBytes)}
                   </td>
                   <td className="px-3 py-2.5">
-                    <div className="flex justify-end gap-0.5">
-                      <IconButton label={`Join code for ${ssid.name}`} write onClick={() => setJoining(ssid.name)}>
-                        <QrCode size={14} />
-                      </IconButton>
-                      <IconButton label={`Schedule for ${ssid.name}`} write onClick={() => setScheduling(ssid.name)}>
-                        <CalendarClock size={14} />
-                      </IconButton>
-                      <IconButton label={`Advanced settings for ${ssid.name}`} onClick={() => setAdvanced(ssid)}>
-                        <SlidersHorizontal size={14} />
-                      </IconButton>
-                      <IconButton label={`Edit ${ssid.name}`} write onClick={() => setEditing(ssid)}>
-                        <Pencil size={14} />
-                      </IconButton>
-                      <IconButton label={`Delete ${ssid.name}`} write onClick={() => setDeleting(ssid)} className="hover:text-danger">
-                        <Trash2 size={14} />
-                      </IconButton>
-                    </div>
+                    {actions(ssid)}
                   </td>
                 </tr>
                 )
@@ -171,6 +220,7 @@ export function WirelessPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <p className="mt-3 text-[12px] text-faint">

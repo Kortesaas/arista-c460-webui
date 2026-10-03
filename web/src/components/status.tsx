@@ -22,10 +22,10 @@ export function Dot({ tone, pulse, className }: { tone: Tone; pulse?: boolean; c
 }
 
 /** Big number used in overview tiles. */
-export function Stat({ label, value, detail, tone = 'neutral', icon }: { label: string; value: ReactNode; detail?: ReactNode; tone?: Tone; icon?: ReactNode }) {
+export function Stat({ label, value, detail, tone = 'neutral', icon, className }: { label: string; value: ReactNode; detail?: ReactNode; tone?: Tone; icon?: ReactNode; className?: string }) {
   const valueColor: Record<Tone, string> = { neutral: 'text-ink', accent: 'text-accent-text', ok: 'text-ok', warn: 'text-warn', danger: 'text-danger' }
   return (
-    <div className="min-w-0 rounded-lg border border-line bg-surface p-3">
+    <div className={cn('min-w-0 rounded-lg border border-line bg-surface p-3', className)}>
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-[12px] font-medium text-muted">{label}</span>
         {icon && <span className="text-faint">{icon}</span>}

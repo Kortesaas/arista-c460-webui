@@ -154,7 +154,18 @@ func main() {
 	setPassword := flag.Bool("set-password", false, "read a new UI password from stdin and store its hash")
 	username := flag.String("username", "", "login name stored with -set-password (default: keep current, or \""+DefaultUsername+"\")")
 	showVersion := flag.Bool("version", false, "print version")
+	doBootstrap := flag.Bool("bootstrap", false, "first-time setup on the AP: create the OpenConfig API user, provision hostname/country, write the config, then exit")
+	country := flag.String("country", "", "with -bootstrap: regulatory country code, e.g. DE (required on a new AP)")
+	loginUser := flag.String("factory-user", "admin", "with -bootstrap: OpenConfig login to use when the config has none")
+	loginPass := flag.String("factory-password", "admin", "with -bootstrap: password for -factory-user")
 	flag.Parse()
+
+	if *doBootstrap {
+		if err := runBootstrap(bootstrapOptions{configPath: *configPath, country: *country, loginUser: *loginUser, loginPass: *loginPass}); err != nil {
+			log.Fatalf("bootstrap: %v", err)
+		}
+		return
+	}
 
 	if *showVersion {
 		fmt.Println(version)

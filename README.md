@@ -1,138 +1,288 @@
-# arista-c460-webui
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-white.png">
+    <img src="docs/images/logo.png" alt="ARRR-ISTA C460" width="420">
+  </picture>
+</p>
 
-A local, self-hosted web interface for the **Arista C-460** Wi-Fi 7 access point. It runs on the access point itself and lets you manage it from a browser at `http://<ap-ip>/`, like the built-in web UI of a typical standalone access point. No controller and no cloud service are needed.
+<p align="center">
+  <b>A friendly local web interface for the Arista C-460 Wi-Fi 7 access point.</b><br>
+  Runs on the access point itself. No controller, no cloud, no subscription.
+</p>
 
-The UI carries a parody brand, **ARRR-ISTA C460**, to make clear at a glance that it is a community project.
+<p align="center">
+  <a href="#set-up-a-new-access-point">Set up a new AP</a> ·
+  <a href="#what-you-get">Features</a> ·
+  <a href="#everyday-use">Everyday use</a> ·
+  <a href="#troubleshooting">Troubleshooting</a> ·
+  <a href="#how-it-works">How it works</a>
+</p>
 
-> **Unofficial.** This project is not affiliated with, endorsed by or supported by Arista Networks. It changes files on the AP and uses interfaces the vendor does not document for this purpose. Use it at your own risk, and keep console access available while you experiment.
+![Overview](docs/images/overview.png)
 
-## Features
+The C-460 is normally managed from Arista's cloud. **arista-c460-webui** gives it a built-in web interface, like a standalone access point you buy in a shop: open `http://<ap-address>/` and manage it in the browser.
 
-- **Overview:** status, automatic health checks (default password, clock sync, PoE class, temperature, missing backup uplink, busy channels, radar, weak clients, pending restarts, memory/flash), clients, radios, uplink, and history graphs.
-- **History:** clients per network, uplink traffic, channel utilisation and temperature, one point per minute for 24 hours, plus a two-hour signal and roaming track per client. Kept in fixed-size memory buffers (empty after a service restart).
-- **Wireless networks (read/write):** create, edit and delete SSIDs: name, security (WPA3 Personal, WPA2/WPA3 mixed, WPA2 Personal, Enhanced Open, Open), password, bands (2.4/5/6 GHz), VLAN tag or untagged, client isolation, hidden, enabled.
-- **Advanced wireless settings (read/write):** per-SSID 802.11k radio measurements and BSS-load advertising, with firmware-default choices and actual per-band driver readback.
-- **Switch discovery (read/write):** live LLDP neighbours and ports, advertisement interval and hold multiplier. Explicit timing settings are stored locally and restored if the daemon resets them.
-- **Radios (read/write):** channel (regulatory list, DFS marked), channel width, transmit power, automatic channel/power, enable/disable. It shows the effective EIRP, channel utilisation and noise floor, and suggests the quietest channel from the RF scan.
-- **Staged changes:** SSID and radio edits can be added to a pending list and applied in one transaction, so Wi-Fi restarts once.
-- **Join codes:** a QR code per network for joining with a phone camera, with a printable card (administrators only; each view is logged).
-- **Schedules:** broadcast a network only at certain times (per weekday, overnight windows allowed), evaluated in the configured time zone once the clock is synchronised. Manual changes last until the next scheduled change.
-- **WPA2/WPA3 mixed mode:** stored as WPA3 in OpenConfig; the service switches the firmware's native VAP section to transition mode through the firmware's own apply path (`handle_ap_conf.sh`), only after the firmware diff confirms that nothing else changes and no restart is needed, and re-applies it after other configuration changes. 2.4 and 5 GHz only. If the service stops, the network falls back to WPA3-only.
-- **Clients:** signal, SNR, rates, traffic, IPv4/IPv6 and hostname (including static IPv4 learned through ARP), plus live association details and a confirmed reconnect action. Reconnect briefly disconnects the station; it does not ban it.
-- **RF scan:** neighbouring access points with channel occupancy.
-- **Management network (read/write):** static IPv4 or DHCP client, subnet mask, gateway, up to three DNS servers, DNS search domain, and native/untagged or tagged management VLAN. Saved changes apply after an AP restart; the UI shows the destination address.
-- **Time synchronisation (read/write):** primary and secondary NTP servers (one click to use the router), time zone, service and clock-sync status. Saves use the native encrypted configuration, with local desired settings restored when the WebUI service starts.
-- **Diagnostics:** AP-side ping, DNS lookup, route tracing and TCP-port connectivity; VLAN/bridge paths, management routes and learned neighbours; searchable wireless connection, channel and radar events with text export; and live per-BSSID operating state. Tests have fixed time/output limits. Client details can prefill a connection test.
-- **System:** device/VLAN display names, SSH enable/disable, timed LED location, restart with firmware boot-trust checks, hardware/power/clock/LLDP information, Ethernet ports, and administrator username and password.
-- **Backup and restore:** download SSIDs, radios, management network, names, time servers and LLDP timing as a JSON file and apply it to the same or another C-460, choosing which parts to apply. Wi-Fi passwords are left out unless you set a passphrase; then they are encrypted with it (scrypt + AES-256-GCM). Management addresses are off by default when copying, so a second AP does not take over the first one's IP.
-- **SNMP monitoring (read-only):** optional SNMP v1/v2c agent on UDP 161 with MIB-II system group, ifTable and ifXTable (64-bit counters) for both Ethernet sockets. ifIndex 1/2 always means ETH 1/ETH 2. Community, location and contact are set under Network; writes are always refused.
-- **HTTPS:** served on port 443 with a self-signed certificate generated on first start, next to plain HTTP on port 80.
-- **Accounts and change log:** an administrator and an optional read-only account (sees everything, can run connection tests, cannot change settings or see passwords and tokens). Every change, including schedule actions, is logged with user, address and what changed; the AP keeps the newest 300 entries.
-- **Prometheus:** optional `/metrics` endpoint protected by a bearer token (clients, radios, Ethernet counters, temperature, health findings).
-- **Live updates:** shared AP sampling configurable from 1–60 seconds (default 5). Browsers follow that cadence, pause in background tabs, share pending requests and back off during an outage. Slow AP reads can extend the interval; detailed hardware information remains a separate, slower sample.
-- A small pirate hat spins continuously while the page starts and waits for AP data, including after a restart. Reduced-motion preferences are respected.
-- Light, dark and system themes; works on phones.
+> [!WARNING]
+> **Unofficial.** ARRR-ISTA is a parody brand for a community project. This project is not affiliated with, endorsed by or supported by Arista Networks. It changes files on the access point and uses interfaces the vendor does not document for this purpose. Use it at your own risk and keep a way to reach the AP's console while you experiment.
+
+---
+
+## What you get
+
+| | |
+|---|---|
+| **See what's going on** | Health checks that point at problems (clock, power, temperature, busy channels, radar, weak clients, missing backup uplink, default password). 24-hour graphs for clients, traffic, channel use and temperature. Connected clients with signal history and roaming between bands. RF scan of nearby networks. Wi-Fi events and a log of every configuration change. |
+| **Wireless networks** | Create and edit networks: WPA3, **WPA2/WPA3 mixed** for older devices, WPA2, Enhanced Open or open; 2.4/5/6 GHz; VLAN per network; client isolation; hidden networks. **QR codes** for joining by phone, with a printable card. **Schedules** that turn a network on and off at set times. |
+| **Radios** | Channel, width and power per band, automatic channel and power, and a **suggested quieter channel** based on the scan. |
+| **Change safely** | **Add to pending** collects several changes and applies them together, so Wi-Fi restarts once. A **read-only account** lets crew look without touching anything. **Backup and restore**, including copying the configuration to another AP. |
+| **Network and system** | Management IP (static or DHCP), gateway, DNS and management VLAN. Time servers (one click to use your router) and time zone. LLDP switch discovery. SSH on/off, locate LED, safe restart, administrator login. |
+| **Fit into your monitoring** | Read-only **SNMP** v1/v2c like your switches (system group, ifTable, ifXTable). Optional **Prometheus** `/metrics` with a token. |
+| **Everywhere** | Light and dark themes, works on phones, HTTP and HTTPS. |
+
+<table>
+  <tr>
+    <td width="66%"><img src="docs/images/wireless.png" alt="Wireless networks"></td>
+    <td width="34%" rowspan="2"><img src="docs/images/mobile.png" alt="Overview on a phone"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/schedule.png" alt="Network schedule"></td>
+  </tr>
+</table>
+
+![Radios in dark mode](docs/images/radios-dark.png)
+
+---
+
+## Set up a new access point
+
+This takes about 20 minutes per AP. You do steps 1–4 once on each AP; step 5 is a single command from your computer.
+
+### What you need
+
+- An **Arista C-460** with firmware **18.2.0-32** (other versions are untested).
+- **PoE 802.3at** (PoE+) or better. 802.3af works but reduces radio power.
+- A computer on the same network with **git**, **Go ≥ 1.26**, **Node.js ≥ 20**, **make** and an **SSH key** (`ls ~/.ssh/id_ed25519.pub`; create one with `ssh-keygen -t ed25519` if it is missing).
+- Optional but recommended: a **USB serial console cable** (115200 baud, 8N1) in case the network is not reachable.
+
+Get the code:
+
+```bash
+git clone https://github.com/Kortesaas/arista-c460-webui.git
+cd arista-c460-webui
+```
+
+### 1. Connect the AP and find its address
+
+Plug the AP into your switch or PoE injector (**ETH 1** is the usual uplink) and wait about three minutes for it to boot. It gets its address by DHCP; look for the new lease in your router, or for the MAC address printed on the label.
+
+Sign in to the AP's command line with the factory login **`config` / `config`**, either over SSH or over the serial console:
+
+```bash
+ssh config@192.168.1.40
+```
+
+You now see the vendor CLI. All commands in steps 2–4 are typed there.
+
+> [!TIP]
+> Give the AP a fixed address in your router (a DHCP reservation for its MAC). That keeps `http://<ap-address>/` the same after every restart. You can also set a static address later in the web interface.
+
+### 2. Keep the AP away from the cloud
+
+Out of the box, the AP looks for Arista's cloud as soon as it has internet access. The cloud then switches the local mode off again and wipes the local configuration. Point management discovery at the AP itself:
+
+```text
+server discovery method ipdns pri 127.0.0.1 sec 127.0.0.1
+```
+
+Check it with `show server discovery` (both servers `127.0.0.1`) and `show device status` (**Not connected**).
+
+> [!CAUTION]
+> Never run `default server discovery` afterwards. It turns cloud discovery back on.
+
+This only stops the cloud management connection. The AP and its Wi-Fi clients keep normal internet access.
+
+### 3. Turn on local configuration (OpenConfig)
+
+The web interface talks to the AP's own configuration service, which ships disabled. These two commands enable it and save the setting so it survives restarts:
+
+```text
+radartool radio 0 params ";. /opt/ap/configparser; cfg_set oc_enabled 1 /opt/sensor/sensor.conf; /opt/init.d/handle_openconfig_mode INIT;"
+radartool radio 0 params ";/opt/sensor/scripts/encrypt_secret.sh -i /opt/sensor/sensor.conf -o /tmp/sensor-oc.enc && test -s /tmp/sensor-oc.enc && mv /tmp/sensor-oc.enc /opt/sensor/sensor.conf.enc;"
+```
+
+Check it with `show openconfig mode`.
+
+### 4. Allow your computer to log in as root
+
+The installer copies files over SSH as `root`, using your SSH key. On your computer, print your public key:
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+On the AP's command line, add it (paste your whole key line between the single quotes):
+
+```text
+radartool radio 0 params ";mkdir -p /root/.ssh; echo 'ssh-ed25519 AAAA…your key… you@laptop' >> /root/.ssh/authorized_keys; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys;"
+```
+
+Back on your computer, this must now print `root`, without asking for a password:
+
+```bash
+ssh root@192.168.1.40 whoami
+```
+
+### 5. Install the web interface
+
+From the project folder on your computer, with your regulatory country (`DE`, `AT`, `CH`, `GB`, `US`…) and a name for the AP:
+
+```bash
+deploy/deploy.sh 192.168.1.40 --bootstrap --country DE --site-name "Stage left"
+```
+
+The script:
+
+1. builds the web interface and checks that the AP is a C-460 with local configuration enabled,
+2. **creates a private API user** for the web interface (it signs in once with the factory API login and replaces it, so that login stops working afterwards),
+3. sets the AP's hostname and **regulatory country**. Changing the country can make the AP restart its radios or reboot once; just run the same command again afterwards,
+4. asks you for the **web interface login**: username (default `config`) and a password of your choice,
+5. installs and starts the service so it also starts after every reboot, and
+6. runs the firmware's **boot-time trust check**, so you know a restart will not wipe the installation ([why this matters](#the-firmwares-boot-time-trust-check)).
+
+### 6. First visit
+
+Open `http://192.168.1.40/` (or `https://…`; your browser warns once about the self-signed certificate) and sign in. Then work through this short list:
+
+1. **Overview → Health** lists anything that needs attention.
+2. **Network → Time synchronisation → Edit**: click **Use router** (most routers answer NTP) and pick your **time zone**. Schedules and event times depend on it.
+3. **Wireless networks → Add network** for each network. For a mix of new and old devices, use **WPA2/WPA3 Personal (mixed)**.
+4. **System → Backup and restore → Download backup**. Enter a passphrase if the file should include the Wi-Fi passwords.
+
+### More access points
+
+Repeat steps 1–5 for each AP. Then, on the new AP, open **System → Backup and restore → Choose file…** and pick the backup from your first AP. Its networks, radios and time settings are copied over; the Wi-Fi passwords come along if the backup was made with a passphrase. The new AP keeps its own name and IP address unless you choose otherwise.
+
+---
+
+## Everyday use
+
+**Updating.** Get the latest version and run the installer again. Settings, logins and the change log are kept; the history graphs start over:
+
+```bash
+git pull
+deploy/deploy.sh 192.168.1.40
+```
+
+**Several changes at once.** Every save restarts Wi-Fi on the AP for a few seconds. To change several networks or radios, use **Add to pending** in each dialog and then **Apply all** in the bar at the bottom.
+
+**Crew access.** **System → Read-only account** creates a second login that sees everything but cannot change settings, see passwords or restart the AP.
+
+**Who changed what.** **Events → Configuration changes** lists every change with user, address and details. Scheduled on/off switches appear there too.
+
+**Monitoring.** Turn on **Network → Monitoring · SNMP** (use the same community as your switches) or **Prometheus**, which shows a ready-to-paste `prometheus.yml` snippet.
+
+**Other installer options:**
+
+```bash
+deploy/deploy.sh <ap> --set-password            # reset a forgotten web UI password
+deploy/deploy.sh <ap> --vlan-names vlans.json   # {"10": "Office", "20": "Guests"} shown next to VLAN ids
+deploy/deploy.sh <ap> --check                   # only the boot-time trust check
+deploy/deploy.sh <ap> --uninstall
+deploy/deploy.sh --help
+```
+
+---
+
+## Troubleshooting
+
+| Problem | What to do |
+|---|---|
+| Browser says **connection refused** | Your browser may have switched to `https://` silently, or you are on a network that cannot reach the management address. Try both `http://` and `https://`, and from a device on the management network. |
+| `deploy.sh`: **root SSH failed** | Repeat step 4 and check that `ssh root@<ap> whoami` works without a password. |
+| `deploy.sh`: **OpenConfig agent certificate not found** | Local configuration is off. Repeat step 3. |
+| **Bootstrap: sign-in to the OpenConfig agent failed** | The AP already has an API user (for example from an earlier setup). Use that user instead: put `{"username": "…", "password": "…"}` into `secrets/ap.secret.json` and run `deploy/deploy.sh <ap> --gnmi-credentials secrets/ap.secret.json`. |
+| Settings are **gone after a reboot** | The firmware wiped its writable layer because it found an untrusted file. See [the boot-time trust check](#the-firmwares-boot-time-trust-check), redo steps 2–5, and always run `deploy/deploy.sh <ap> --check` before restarting after manual changes. |
+| A WPA2/WPA3 network shows **activating mixed** | Normal for up to a minute after any change; until then only WPA3 devices can join. If it shows **WPA2 inactive**, hover over the badge for the reason. |
+| **Schedule waiting for clock sync** | The AP's clock is not synchronised. Set a reachable time server under **Network**. |
+| **Forgot the web interface password** | `deploy/deploy.sh <ap> --set-password` |
+
+---
 
 ## How it works
 
 ```
-browser ──HTTP :80──▶ c460-webui (Go, on the AP) ──gNMI/TLS 127.0.0.1:8080──▶ AP OpenConfig agent ──▶ radios
+browser ──HTTP :80 / HTTPS :443──▶ c460-webui (Go, on the AP) ──gNMI/TLS 127.0.0.1:8080──▶ AP OpenConfig agent ──▶ radios
+                                         │
+                                         └──▶ firmware's native configuration (management IP, time, LLDP, WPA2/WPA3 mixed)
 ```
 
-The backend is a single static ARM64 Go binary with the React UI embedded (about 12 MB). Wireless and SSH settings use the AP's OpenConfig (gNMI) agent. Management addresses, DNS and management VLAN are staged in the firmware's native `ifcfg-br0[.<VLAN>]` and discovery configuration files, preserving IPv6 and other discovery fields; the native management CLI reboots automatically, so it is deliberately not used for saving. Writes use the vendor's interface lock and roll back on failure. The AP consumes the saved settings at the next explicit restart. A boot-ID marker keeps the pending-restart notice accurate across web-service restarts. LED location and reboot use the native vendor CLI. The agent's TLS certificate is pinned from `/opt/openconfig/cert/agent.crt`. Every OpenConfig AP-level write also re-sends the API user; this firmware otherwise resets API authentication on such writes.
+The backend is a single static ARM64 Go binary (about 12 MB) with the React interface built in. It lives in `/opt/c460-webui/` on the AP.
 
-Tested on a C-460 with firmware **18.2.0-32**. See [native feature findings and verification](docs/native-features.md) for the additional root-access adapters and their limits.
+- **Wireless and radios** use the AP's OpenConfig (gNMI) agent. Its TLS certificate is pinned from `/opt/openconfig/cert/agent.crt`. Every write re-sends the API user, because this firmware otherwise resets API authentication.
+- **Management address, DNS and management VLAN** are written to the firmware's native `ifcfg-br0[.<VLAN>]` and discovery files, using the vendor's lock, and take effect at the next restart. The native CLI would reboot immediately, so it is not used for saving.
+- **WPA2/WPA3 mixed mode** is not available through OpenConfig. Such networks are stored as WPA3 there, and the service switches the firmware's native setting to transition mode (`AP_SEC_MODE=7`) through the firmware's own apply script. It only does so after the firmware's diff tool confirms that nothing else changes and no restart is needed, and re-applies the setting after other configuration changes. If the service stops, these networks fall back to WPA3-only. Mixed mode works on 2.4 and 5 GHz; 6 GHz requires WPA3.
+- **History, health checks and schedules** run inside the service. History is kept in fixed-size memory buffers (24 hours, one point per minute); the change log keeps the newest 300 entries on disk.
 
-## Requirements per access point
+Tested on a C-460 with firmware **18.2.0-32**. More detail: [native feature findings](docs/native-features.md).
 
-1. **Root SSH with a key.** The deploy script installs over SSH as `root`.
-2. **OpenConfig mode enabled** with an API user. You need that user's name and password.
-3. The AP needs a management IP that your computer can reach.
+### The firmware's boot-time trust check
 
-Steps 1 and 2 are device-specific bootstrap work and are not automated by this repository.
+At every boot the firmware (`/etc/rc.d/fs_init`) checks its writable layer. If it finds anything it does not trust, it **deletes the entire writable layer** (`/overlay/upper`: local configuration mode, API users, SSH keys, this interface…) and boots the other firmware partition. It fails the check when:
 
-## Install
-
-Build requirements: Go ≥ 1.26, Node.js ≥ 20, `make`.
-
-```bash
-cp deploy/gnmi-credentials.example.json secrets/ap1.secret.json   # gitignored; fill in
-deploy/deploy.sh 192.168.1.40 --gnmi-credentials secrets/ap1.secret.json --site-name "Stage left"
-```
-
-On the first install the script asks for the web UI administrator login: the username defaults to `config`, and you choose the password (at least 6 characters; no default password is shipped). It then:
-
-- installs `/opt/c460-webui/c460-webui`, `config.json` (mode 0600) and `auth.json` (bcrypt hash);
-- installs the procd script as `/opt/c460-webui/init/c460-webui` and links it from `/opt/init.d/c460-webui` and `/etc/rc.d/S0900c460-webui` (symlinks only, see below);
-- starts the service, checks `http://<ap>/` and runs the boot-trust pre-check.
-
-The same command updates an existing install; the configuration and password are kept. Other options:
-
-```bash
-deploy/deploy.sh <ap> --set-password            # reset the UI login (e.g. forgotten password)
-deploy/deploy.sh <ap> --username admin          # use a different login name
-deploy/deploy.sh <ap> --vlan-names vlans.json   # {"10": "Office", "20": "Guests"} shown next to VLAN ids
-deploy/deploy.sh <ap> --uninstall
-```
-
-Firmware upgrades or factory resets probably remove the installation; deploy again afterwards.
-
-### Firmware boot-time trust check (read this before changing the AP)
-
-At every boot the C-460 firmware (`/etc/rc.d/fs_init`) checks its writable layer. If it finds anything it does not trust, it **deletes the entire writable layer** (`/overlay/upper`: your OpenConfig mode, API users, SSH keys, this UI…) and boots the other firmware partition. It fails the check when:
-
-- any **regular file** is in a protected directory: `/usr`, `/bin`, `/etc`, `/lib`, `/lib64`, `/sbin`, `/opt/init.d`, `/opt/lib`, `/opt/keys`, `/opt/scripts`, `/opt/sensor/scripts`, `/opt/dhclient`, `/opt/udhcpc` (symlinks are fine; exempt: `/etc/resolv.conf`, `/etc/profile`, `/usr/local/etc/`, `/lib/firmware/`). This includes Python bytecode caches: run any Python on the AP as `python3 -B`;
+- any **regular file** is in a protected directory: `/usr`, `/bin`, `/etc`, `/lib`, `/lib64`, `/sbin`, `/opt/init.d`, `/opt/lib`, `/opt/keys`, `/opt/scripts`, `/opt/sensor/scripts`, `/opt/dhclient`, `/opt/udhcpc` (symlinks are fine; exempt: `/etc/resolv.conf`, `/etc/profile`, `/usr/local/etc/`, `/lib/firmware/`). Python bytecode caches count too, so run any Python on the AP as `python3 -B`;
 - `/opt/passwd`, `/opt/group`, `/opt/shells`, `/opt/sensor/sensor-shell`, `/opt/sensor/sensor.md5` or `/etc/shadow` differ from the image (they are measured into TPM PCR 7);
 - a vendor file listed in `/opt/sensor/sensor.md5` was modified.
 
-Custom executable files live under `/opt/c460-webui/`, with symlinks in the protected service directories. Settings use the native writable network/discovery files and encrypted sensor configuration. Before rebooting after **any** manual change on the AP, run:
-
-```bash
-deploy/deploy.sh <ap> --check      # runs deploy/overlay-check.sh on the AP, read-only
-```
+That is why everything this project installs lives in `/opt/c460-webui/`, with only symlinks in the protected service directories, and why the installer ends with a trust check. Before restarting after **any** manual change on the AP, run `deploy/deploy.sh <ap> --check`.
 
 ### Configuration file
 
-`/opt/c460-webui/config.json` on the AP:
+`/opt/c460-webui/config.json` on the AP. Everything except the agent settings can be changed in the web interface.
 
 | Key | Default | Meaning |
 |---|---|---|
 | `listen` | `:80` | HTTP listen address |
 | `httpsListen` | `:443` | HTTPS listen address; `off` disables HTTPS |
 | `tlsDir` | `tls/` next to the config | Self-signed certificate and key (generated on first start) |
-| `pollSeconds` | `5` | Shared AP sampling interval, 1–60 seconds; editable in System → Live updates |
-| `authFile` | `/opt/c460-webui/auth.json` | Username and bcrypt password hash |
+| `pollSeconds` | `5` | Shared AP sampling interval, 1–60 seconds |
+| `authFile` | `/opt/c460-webui/auth.json` | Logins (bcrypt hashes) |
 | `hostname` | eth0 MAC with dashes | OpenConfig access-point key |
-| `siteName` | — | Label shown in the UI |
-| `vlanNames` | — | Optional VLAN id → name map |
-| `gnmi.username` / `gnmi.password` | — | OpenConfig API user (required) |
+| `siteName` | — | AP name shown in the interface, SNMP and Prometheus |
+| `vlanNames` | — | VLAN id → label |
+| `gnmi.username` / `gnmi.password` | — | OpenConfig API user (created by `--bootstrap`) |
 | `gnmi.address` | `127.0.0.1:8080` | Agent address |
-| `metrics` | off | `enabled`, `token` for `/metrics`; editable under Network → Prometheus |
 | `timeZone` | `UTC` | IANA time zone for schedules |
-| `schedules` | — | Per-SSID broadcast schedules; editable under Wireless networks |
-| `changeLog` | `changes.json` next to the config | Change log file (newest 300 entries) |
-| `snmp` | off | `enabled`, `community`, `location`, `contact`; editable under Network → Monitoring. `listen` (default `:161`) is file-only |
+| `schedules` | — | Per-network schedules |
+| `snmp` | off | `enabled`, `community`, `location`, `contact`; `listen` (default `:161`) is file-only |
+| `metrics` | off | `enabled`, `token` for `/metrics` |
+| `changeLog` | `changes.json` next to the config | Change log file |
 
-## Security notes
+### Security notes
 
-- The UI is served over HTTP and over HTTPS with a self-signed certificate; use it on a trusted management network. SNMP v1/v2c sends the community in clear text, so only enable it on the management network. Sessions use an HttpOnly, SameSite=Strict cookie. Login failures are rate-limited, and changes require a JSON request.
-- Wi-Fi passwords are never sent to the browser.
-- `config.json` contains the OpenConfig API password; keep it at mode 0600 and never commit it (`*.secret.json` and `secrets/` are gitignored).
+- Use the interface on a trusted management network. HTTPS uses a self-signed certificate. Sessions use HttpOnly, SameSite=Strict cookies; failed logins are rate-limited; changes require a JSON request.
+- Wi-Fi passwords never reach the browser, except through the QR join code, which only administrators can open and which is logged.
+- SNMP v1/v2c sends its community in clear text; enable it only on the management network.
+- `config.json` contains the OpenConfig API password (mode 0600). Never commit AP credentials: `*.secret.json` and `secrets/` are gitignored.
+
+---
 
 ## Development
 
 ```bash
 make check                                     # go vet + TypeScript
+make build                                     # web + ARM64 binary in build/
 ssh -L 18099:127.0.0.1:80 root@<ap>            # tunnel to an installed backend
 make dev                                       # Vite on http://localhost:5175, /api proxied to the tunnel
-make build                                     # web + ARM64 binary in build/
+go test ./...                                  # backend tests (an SNMP interop test uses net-snmp if installed)
 ```
 
-Project layout: `*.go` contains the backend (`gnmi.go` agent client, `state.go` state model, `api.go` HTTP API, `auth.go` sessions, `system.go` device info). `web/` contains the React + Tailwind UI, and `deploy/` the install script and procd service.
+Backend: `*.go` in the repository root (`gnmi.go` agent client, `state.go` state model, `api.go` HTTP API, `auth.go` sessions and roles, `mixed.go` WPA2/WPA3 mixed mode, `schedule.go`, `history.go`, `health.go`, `snmp.go`, `metrics.go`, `bootstrap.go`). Interface: `web/` (React, Tailwind). Installer and service script: `deploy/`.
 
 ## Known limitations
 
-- Management configuration currently covers IPv4. DHCP mode configures the AP as a DHCP client, not a DHCP server. It does not change router/switch settings or wireless-client DHCP scopes. Tagged management needs a matching switch trunk; a new address must be reachable from the administrator's network.
-- Ethernet uplink selection and IPv6 management are not editable yet. Hardware, clock-sync and Ethernet status are shown where available.
-- The AP's OpenConfig converter rejects some modelled fields (for example WPA2/WPA3 transition mode, DHCP-required, some 802.11r/v timers), so the UI does not offer them.
-- Client detail fields are only shown when the firmware populates them.
+- Management configuration covers IPv4 only. DHCP mode makes the AP a DHCP client, not a server; addresses for Wi-Fi clients come from your router.
+- The firmware chooses the active uplink itself (whichever Ethernet port has a link); there is no preferred-port setting.
+- Some fields in the OpenConfig model are rejected by this firmware (for example DHCP-required and some 802.11r/v timers), so they are not offered.
+- Blocking individual clients is not offered: the firmware's MAC filter cannot be reached through OpenConfig.
+- History is kept in memory and starts empty after the service restarts.
+- Firmware upgrades and factory resets remove the installation; repeat the setup afterwards.

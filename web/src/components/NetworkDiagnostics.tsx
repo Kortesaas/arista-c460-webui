@@ -209,9 +209,9 @@ export function WirelessEventsPanel() {
   )
   const exportEvents = () => {
     const text = [
-      'Wireless events · AP local time',
+      'Wireless events',
       ...rows.map(
-        (e) => `${e.time || 'Unknown time'} | ${e.network || e.interface} | ${e.summary}${e.client ? ` | ${e.client}` : ''}${e.frequency ? ` | ${e.frequency} MHz` : ''}`,
+        (e) => `${e.at ?? (e.time || 'Unknown time')} | ${e.network || e.interface} | ${e.summary}${e.client ? ` | ${e.client}` : ''}${e.frequency ? ` | ${e.frequency} MHz` : ''}`,
       ),
     ].join('\n')
     const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
@@ -268,7 +268,7 @@ export function WirelessEventsPanel() {
         <table className="w-full min-w-[640px] text-left text-[12px]">
           <thead className="sticky top-0 border-b border-line bg-surface text-faint">
             <tr>
-              {['AP local time', 'Network', 'Event', 'Client'].map((h) => (
+              {['Time', 'Network', 'Event', 'Client'].map((h) => (
                 <th key={h} className="px-3 py-2 font-medium">
                   {h}
                 </th>
@@ -278,7 +278,9 @@ export function WirelessEventsPanel() {
           <tbody className="divide-y divide-line">
             {rows.map((event) => (
               <tr key={event.id}>
-                <td className="mono whitespace-nowrap px-3 py-2 text-faint">{event.time ? event.time.replace(/\.\d+$/, '') : '—'}</td>
+                <td className="tabular whitespace-nowrap px-3 py-2 text-muted" title={event.time}>
+                  {event.at ? new Date(event.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : event.time ? event.time.replace(/\.\d+$/, '') : '—'}
+                </td>
                 <td className="px-3 py-2 text-ink">
                   {event.network || 'Unknown network'}
                   <p className="mono text-[11px] text-faint">{event.interface}</p>

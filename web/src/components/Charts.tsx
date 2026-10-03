@@ -101,8 +101,10 @@ export function ChannelLegend() {
 }
 
 /** Parses the AP log timestamp "2026.10.02 07:10:11.123" (AP local time). */
-export function eventTime(value: string): number | null {
-  const m = /^(\d{4})\.(\d{2})\.(\d{2}) (\d{2}):(\d{2}):(\d{2})/.exec(value)
+/** Event time in ms: the AP's zoned timestamp when available, else the raw log time. */
+export function eventTime(event: { time: string; at?: string }): number | null {
+  if (event.at) return Date.parse(event.at)
+  const m = /^(\d{4})\.(\d{2})\.(\d{2}) (\d{2}):(\d{2}):(\d{2})/.exec(event.time)
   if (!m) return null
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])).getTime()
 }
@@ -110,7 +112,7 @@ export function eventTime(value: string): number | null {
 /** Events per time slot, stacked by kind: client activity versus radio warnings. */
 export function EventTimeline({ events }: { events: WirelessEvent[] }) {
   const data = useMemo(() => {
-    const times = events.map((e) => eventTime(e.time)).filter((t): t is number => t !== null)
+    const times = events.map((e) => eventTime(e)).filter((t): t is number => t !== null)
     if (times.length < 2) return null
     const start = Math.min(...times)
     const end = Math.max(...times)
@@ -121,7 +123,7 @@ export function EventTimeline({ events }: { events: WirelessEvent[] }) {
     const count = Math.floor((end - first) / step) + 1
     const buckets = Array.from({ length: count }, (_, i) => ({ at: first + i * step, clients: 0, warnings: 0, other: 0 }))
     for (const e of events) {
-      const t = eventTime(e.time)
+      const t = eventTime(e)
       if (t === null) continue
       const b = buckets[Math.floor((t - first) / step)]
       if (!b) continue

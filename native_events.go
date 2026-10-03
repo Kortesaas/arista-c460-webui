@@ -14,15 +14,16 @@ import (
 )
 
 type WirelessEvent struct {
-	ID        string `json:"id"`
-	Time      string `json:"time"`
-	Kind      string `json:"kind"`
-	Summary   string `json:"summary"`
-	Tone      string `json:"tone"`
-	Interface string `json:"interface"`
-	Network   string `json:"network"`
-	Client    string `json:"client"`
-	Frequency string `json:"frequency"`
+	ID        string     `json:"id"`
+	Time      string     `json:"time"`
+	At        *time.Time `json:"at,omitempty"` // Time read in the AP clock's zone, so browsers can show local time
+	Kind      string     `json:"kind"`
+	Summary   string     `json:"summary"`
+	Tone      string     `json:"tone"`
+	Interface string     `json:"interface"`
+	Network   string     `json:"network"`
+	Client    string     `json:"client"`
+	Frequency string     `json:"frequency"`
 }
 type WirelessEventLog struct {
 	Events      []WirelessEvent `json:"events"`
@@ -52,6 +53,12 @@ func parseWirelessEvents(raw string, networks map[string]string) []WirelessEvent
 		kind := field(3)
 		tail := line[m[1]:]
 		event := WirelessEvent{ID: fmt.Sprintf("%x", sha256.Sum256([]byte(line)))[:20], Time: field(1), Interface: field(2), Kind: kind, Summary: kinds[kind].title, Tone: kinds[kind].tone}
+		// "2006.01.02 15:04:05[.fraction]" in the AP clock's zone.
+		if len(event.Time) >= 19 {
+			if t, err := time.ParseInLocation("2006.01.02 15:04:05", event.Time[:19], time.Local); err == nil {
+				event.At = &t
+			}
+		}
 		event.Network = networks[event.Interface]
 		if strings.HasPrefix(kind, "AP-STA-") {
 			if mac := eventMAC.FindStringSubmatch(" " + tail); mac != nil {

@@ -92,6 +92,9 @@ func (a *API) healthChecks(s stateResponse) []HealthItem {
 	if a.defaultPassword.uses(a.auth) {
 		add("password", "warn", "Default password in use", "Anyone on the network can sign in with config/config. Change it under System.", "/system")
 	}
+	if s.Device.SiteName == "" {
+		add("name", "info", "This AP has no name yet", "A name such as “Stage left” makes it easy to tell several APs apart here, in SNMP and in Prometheus.", "/system")
+	}
 	if t := s.Device.TemperatureC; t != nil && *t > 75 {
 		severity := "warn"
 		if *t > 85 {
