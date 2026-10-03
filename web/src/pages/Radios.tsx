@@ -12,7 +12,7 @@ import type { Band, Radio, RadioInput } from '@/types'
 import { Badge, Button, Field, KeyValue, Panel, Segmented, Select, Spinner, Toggle } from '@/ui/kit'
 import { isDfs, plural } from '@/utils/format'
 
-const WIDTHS: Record<Band, number[]> = { '2.4': [20, 40], '5': [20, 40, 80, 160], '6': [20, 40, 80, 160, 320] }
+const WIDTHS: Record<Band, number[]> = { '2.4': [20, 40], '5': [20, 40, 80, 160], '6': [20, 40, 80, 160] }
 
 export function RadiosPage() {
   const state = useApp((store) => store.state)
@@ -154,7 +154,12 @@ function RadioCard({ radio }: { radio: Radio }) {
             </div>
           </Field>
         </div>
-        <Field label="Channel width" help="Wider channels are faster but overlap more neighbours. 20 MHz is most robust on 2.4 GHz; 40–80 MHz suits 5 GHz; 6 GHz can use up to 320 MHz.">
+        <Field
+          label="Channel width"
+          help={radio.band === '6'
+            ? 'Wider channels can increase speed. Up to 160 MHz can be configured on this firmware; 320 MHz is not available through its local configuration API.'
+            : 'Wider channels can increase speed but overlap more neighbours. 20 MHz is most robust on 2.4 GHz; 40–80 MHz suits 5 GHz.'}
+        >
           <Segmented value={form.width} onChange={(value) => set('width', value)} options={WIDTHS[radio.band].map((width) => ({ value: width, label: `${width}` }))} className="w-full" />
         </Field>
         <div>

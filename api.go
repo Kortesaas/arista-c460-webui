@@ -564,7 +564,9 @@ type radioRequest struct {
 	DTP     bool `json:"dtp"`
 }
 
-var widths = map[string][]int{"2.4": {20, 40}, "5": {20, 40, 80, 160}, "6": {20, 40, 80, 160, 320}}
+// Firmware 18.2.0-32 declares channel-width as uint8. The driver advertises
+// 320 MHz, but OpenConfig rejects that value before it reaches the radio.
+var widths = map[string][]int{"2.4": {20, 40}, "5": {20, 40, 80, 160}, "6": {20, 40, 80, 160}}
 
 func (a *API) updateRadio(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
@@ -601,6 +603,9 @@ func (a *API) radioEntry(id int, req radioRequest) (map[string]any, error) {
 		return nil, errRadioNotFound
 	}
 	b := band(freq)
+	if req.Width == 320 && b == "6" {
+		return nil, errors.New("This firmware's OpenConfig API cannot set 320 MHz; use 160 MHz. A native 320 MHz configuration path has not been verified")
+	}
 	snapshot := a.poller.Snapshot()
 	for _, radio := range snapshot.Radios {
 		if radio.ID == id && len(radio.AllowedChannels) > 0 && !slices.Contains(radio.AllowedChannels, req.Channel) {
