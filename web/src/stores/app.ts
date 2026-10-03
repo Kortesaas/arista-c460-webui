@@ -114,7 +114,8 @@ export const useApp = create<AppStore>((set, get) => ({
           previous?.pollSeconds === state.pollSeconds &&
           previous?.hardware?.updatedAt === state.hardware?.updatedAt &&
           previous?.managementError === state.managementError &&
-          JSON.stringify(previous?.management) === JSON.stringify(state.management)
+          JSON.stringify(previous?.management) === JSON.stringify(state.management) &&
+          JSON.stringify(previous?.radios.map((r) => r.wifi7)) === JSON.stringify(state.radios.map((r) => r.wifi7))
         set({ state: same ? previous : state, connection: state.error ? 'reconnecting' : 'live', error: state.error ?? null })
       } catch (error) {
         if (generation !== sessionGeneration) return

@@ -229,11 +229,13 @@ func main() {
 	poller.OnSample(history.Observe)
 	api := &API{cfg: cfg, auth: auth, gnmi: gnmi, poller: poller, cli: cliInfo, cliTrigger: cliTrigger, snmp: snmp,
 		changes: NewChangeLog(changeLogFile), history: history, overrides: NewWirelessOverrides(filepath.Join(filepath.Dir(*configPath), "wireless-overrides.json"))}
+	api.wifi7 = NewNativeWiFi7(filepath.Join(filepath.Dir(*configPath), "wifi7.json"))
 	mux := http.NewServeMux()
 	api.Register(mux)
 	mux.HandleFunc("GET /metrics", api.metricsEndpoint)
 	go api.maintainLLDP(ctx)
 	go api.runEnforcer(ctx)
+	go api.runNativeWiFi7(ctx)
 	go api.runScheduler(ctx)
 	go poller.Run(ctx)
 	mux.Handle("/", spaHandler(dist))

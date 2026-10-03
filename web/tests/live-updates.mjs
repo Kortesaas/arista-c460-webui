@@ -57,6 +57,11 @@ assert.equal(useApp.getState().state, first, 'unchanged samples must not trigger
 sample.management = { pendingReboot: true }
 await useApp.getState().refresh()
 assert.equal(useApp.getState().state.management.pendingReboot, true, 'management saves should appear before the next radio sample')
+sample.radios = [{ id: 2, wifi7: { operatingMode: '11AHE160', operatingWidth: 160, status: 'off' } }]
+await useApp.getState().refresh()
+sample.radios[0].wifi7 = { operatingMode: '11AEHT320', operatingWidth: 320, status: 'active' }
+await useApp.getState().refresh()
+assert.equal(useApp.getState().state.radios[0].wifi7.operatingWidth, 320, 'native operating changes should appear even when the gNMI sample is unchanged')
 sample.pollSeconds = 1
 sample.generatedAt = 'sample-2'
 await tick(5000)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Lightbulb, RotateCcw, Save } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
+import { Wifi7Settings } from '@/components/Wifi7Settings'
 import { BandChip, Meter } from '@/components/status'
 import { ChannelChart } from '@/components/Charts'
 import { api } from '@/api'
@@ -53,7 +54,8 @@ function RadioCard({ radio }: { radio: Radio }) {
     await change(`${radio.band} GHz radio updated`, () => api.updateRadio(radio.id, form))
     setBusy(false)
   }
-  const advice = radio.enabled && neighbors.length ? recommendChannel(radio, neighbors, form.width) : null
+  const effectiveWidth = radio.wifi7?.saved?.enabled ? radio.wifi7.saved.width : form.width
+  const advice = radio.enabled && neighbors.length ? recommendChannel(radio, neighbors, effectiveWidth) : null
 
   return (
     <Panel
@@ -80,7 +82,7 @@ function RadioCard({ radio }: { radio: Radio }) {
         </div>
         <div>
           <p className="text-2xs uppercase tracking-wider text-faint">Width</p>
-          <p className="tabular text-[15px] font-semibold text-ink">{radio.width} MHz</p>
+          <p className="tabular text-[15px] font-semibold text-ink">{radio.wifi7?.operatingWidth || radio.width} MHz</p>
         </div>
         <div>
           <p className="text-2xs uppercase tracking-wider text-faint">EIRP</p>
@@ -157,10 +159,12 @@ function RadioCard({ radio }: { radio: Radio }) {
         <Field
           label="Channel width"
           help={radio.band === '6'
-            ? 'Wider channels can increase speed. Up to 160 MHz can be configured on this firmware; 320 MHz is not available through its local configuration API.'
+            ? 'Wider channels can increase speed. Enable Wi-Fi 7 below for 320 MHz. These widths are used in Wi-Fi 6E mode.'
             : 'Wider channels can increase speed but overlap more neighbours. 20 MHz is most robust on 2.4 GHz; 40–80 MHz suits 5 GHz.'}
         >
-          <Segmented value={form.width} onChange={(value) => set('width', value)} options={WIDTHS[radio.band].map((width) => ({ value: width, label: `${width}` }))} className="w-full" />
+          {radio.wifi7?.saved?.enabled ? (
+            <p className="rounded border border-line bg-surface-2 px-3 py-2 text-[12px] text-muted">Wi-Fi 7 controls the width: {radio.wifi7.saved.width} MHz. Change it below.</p>
+          ) : <Segmented value={form.width} onChange={(value) => set('width', value)} options={WIDTHS[radio.band].map((width) => ({ value: width, label: `${width}` }))} className="w-full" />}
         </Field>
         <div>
           <Toggle checked={form.dca} onChange={(value) => set('dca', value)} label="Automatic channel" help="Dynamic channel assignment (DCA): the AP moves to a quieter channel on its own." />
@@ -178,6 +182,8 @@ function RadioCard({ radio }: { radio: Radio }) {
           </Button>
         </div>
       </div>
+
+      <Wifi7Settings key={`${radio.wifi7?.saved?.enabled}-${radio.wifi7?.saved?.width}`} radio={radio} />
 
       <div className="border-t border-line pt-3">
         <KeyValue

@@ -88,6 +88,8 @@ type recorder struct {
 	body   bytes.Buffer
 }
 
+func (r *recorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 func (r *recorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
@@ -163,6 +165,11 @@ func (a *API) describeChange(r *http.Request, f map[string]any) string {
 			}
 		}
 		return "Changed radio " + r.PathValue("id")
+	case "PUT /api/radios/{id}/wifi7":
+		if enabled, _ := f["enabled"].(bool); enabled {
+			return fmt.Sprintf("Enabled 6 GHz Wi-Fi 7 at %v MHz", f["width"])
+		}
+		return "Returned the 6 GHz radio to Wi-Fi 6E"
 	case "POST /api/batch":
 		if changes, ok := f["changes"].([]any); ok {
 			return fmt.Sprintf("Applied %d staged changes", len(changes))

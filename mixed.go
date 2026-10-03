@@ -379,6 +379,21 @@ func (a *API) runEnforcer(ctx context.Context) {
 // snapshot is the poller state with the UI's own overrides applied.
 func (a *API) snapshot() APState {
 	st := a.poller.Snapshot()
+	if a.wifi7 != nil {
+		st.Radios = slices.Clone(st.Radios)
+		for i, radio := range st.Radios {
+			if radio.Band == "6" {
+				native := a.wifi7.Snapshot()
+				st.Radios[i].WiFi7 = &native
+				// Keep form/backup writes within OpenConfig's uint8 schema.
+				// The separately verified operating width is displayed by the UI.
+				cfg, _, ok := a.poller.RadioConfig(radio.ID)
+				if ok {
+					st.Radios[i].Width = intv(cfg["channel-width"])
+				}
+			}
+		}
+	}
 	if a.overrides == nil || !a.overrides.HasMixed() {
 		return st
 	}

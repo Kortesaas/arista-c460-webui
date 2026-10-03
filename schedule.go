@@ -282,6 +282,9 @@ func (a *API) setSSIDEnabled(ctx context.Context, name string, on bool) {
 	} else {
 		log.Printf("%s", action)
 		a.poller.Refresh()
+		if err := a.ensureWiFi7(); err != nil {
+			entry.OK, entry.Error = false, err.Error()
+		}
 	}
 	a.changes.Record(entry)
 }

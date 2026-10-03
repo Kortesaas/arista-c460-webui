@@ -33,7 +33,7 @@ The C-460 is normally managed from Arista's cloud. **arista-c460-webui** gives i
 |---|---|
 | **See what's going on** | Health checks that point at problems (clock, power, temperature, busy channels, radar, weak clients, missing backup uplink, default password). 24-hour graphs for clients, traffic, channel use and temperature. Connected clients with signal history and roaming between bands. RF scan of nearby networks. Wi-Fi events and a log of every configuration change. |
 | **Wireless networks** | Create and edit networks: WPA3, **WPA2/WPA3 mixed** for older devices, WPA2, Enhanced Open or open; 2.4/5/6 GHz; VLAN per network; client isolation; hidden networks. **QR codes** for joining by phone, with a printable card. **Schedules** that turn a network on and off at set times. |
-| **Radios** | Channel, width and power per band, automatic channel and power, and a **suggested quieter channel** based on the scan. |
+| **Radios** | Channel, width and power per band, automatic channel and power, and a **suggested quieter channel** based on the scan. Native **6 GHz Wi-Fi 7 at 160 or 320 MHz**, with verified operating state and restoration after restart/configuration changes. |
 | **Change safely** | **Add to pending** collects several changes and applies them together, so Wi-Fi restarts once. A **read-only account** lets crew look without touching anything. **Backup and restore**, including copying the configuration to another AP. |
 | **Network and system** | Management IP (static or DHCP), gateway, DNS and management VLAN. Time servers (one click to use your router) and time zone. LLDP switch discovery. SSH on/off, locate LED, safe restart, administrator login. |
 | **Fit into your monitoring** | Read-only **SNMP** v1/v2c like your switches (system group, ifTable, ifXTable). Optional **Prometheus** `/metrics` with a token. |
@@ -218,7 +218,8 @@ browser ──HTTP :80 / HTTPS :443──▶ c460-webui (Go, on the AP) ──gN
 
 The backend is a single static ARM64 Go binary (about 12 MB) with the React interface built in. It lives in `/opt/c460-webui/` on the AP.
 
-- **Wireless and radios** use the AP's OpenConfig (gNMI) agent. Its TLS certificate is pinned from `/opt/openconfig/cert/agent.crt`. Every write re-sends the API user, because this firmware otherwise resets API authentication.
+- **Wireless and ordinary radio settings** use the AP's OpenConfig (gNMI) agent. Its TLS certificate is pinned from `/opt/openconfig/cert/agent.crt`. Every write re-sends the API user, because this firmware otherwise resets API authentication.
+- **6 GHz Wi-Fi 7** uses the vendor's native configuration manager, with radio-only diff validation, operating mode/width verification and rollback. The service saves and restores the selected 160 or 320 MHz mode after configuration changes and at startup.
 - **Management address, DNS and management VLAN** are written to the firmware's native `ifcfg-br0[.<VLAN>]` and discovery files, using the vendor's lock, and take effect at the next restart. The native CLI would reboot immediately, so it is not used for saving.
 - **WPA2/WPA3 mixed mode** is not available through OpenConfig. Such networks are stored as WPA3 there, and the service switches the firmware's native setting to transition mode (`AP_SEC_MODE=7`) through the firmware's own apply script. It only does so after the firmware's diff tool confirms that nothing else changes and no restart is needed, and re-applies the setting after other configuration changes. If the service stops, these networks fall back to WPA3-only. Mixed mode works on 2.4 and 5 GHz; 6 GHz requires WPA3.
 - **History, health checks and schedules** run inside the service. History is kept in fixed-size memory buffers (24 hours, one point per minute); the change log keeps the newest 300 entries on disk.
@@ -280,6 +281,7 @@ Backend: `*.go` in the repository root (`gnmi.go` agent client, `state.go` state
 
 ## Known limitations
 
+- Wi-Fi 7 / 320 MHz controls affect the whole 6 GHz radio. A 6 GHz-only test SSID prevents band fallback; MLO is not configured. See [native feature verification](docs/native-features.md).
 - Management configuration covers IPv4 only. DHCP mode makes the AP a DHCP client, not a server; addresses for Wi-Fi clients come from your router.
 - The firmware chooses the active uplink itself (whichever Ethernet port has a link); there is no preferred-port setting.
 - Some fields in the OpenConfig model are rejected by this firmware (for example DHCP-required and some 802.11r/v timers), so they are not offered.

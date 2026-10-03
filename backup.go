@@ -35,6 +35,7 @@ type Backup struct {
 	} `json:"source"`
 	SSIDs      []ssidRequest      `json:"ssids"`
 	Radios     []BackupRadio      `json:"radios"`
+	WiFi7      *WiFi7Settings     `json:"wifi7,omitempty"`
 	Management *ManagementRequest `json:"management,omitempty"`
 	Labels     BackupLabels       `json:"labels"`
 	Time       *TimeInput         `json:"time,omitempty"`
@@ -159,6 +160,9 @@ func (a *API) createBackup(w http.ResponseWriter, r *http.Request) {
 	for _, radio := range st.Radios {
 		b.Radios = append(b.Radios, BackupRadio{Band: radio.Band, radioRequest: radioRequest{Enabled: radio.Enabled, Channel: radio.Channel, Width: radio.Width, Power: radio.PowerRequested, DCA: radio.DCA, DTP: radio.DTP}})
 	}
+	if a.wifi7 != nil {
+		b.WiFi7 = a.wifi7.Saved()
+	}
 	if m, _, err := a.cli.Snapshot(); err == "" && m.Mode != "" {
 		b.Management = &ManagementRequest{CommVLAN: m.CommVLAN, Mode: m.Mode, IPv4: m.IPv4, Netmask: m.Netmask, Gateway: m.Gateway, DNS: m.DNS, DNSSearch: m.DNSSearch}
 	}
@@ -266,8 +270,28 @@ func (a *API) planRestore(req restoreRequest) (*restorePlan, error) {
 		plan.steps = append(plan.steps, fmt.Sprintf("%d wireless networks", len(entries)))
 	}
 	if req.Sections.Radios {
+		if b.WiFi7 != nil {
+			if err := b.WiFi7.validate(); err != nil {
+				return nil, err
+			}
+			if a.wifi7 == nil || !a.wifi7.Snapshot().Supported {
+				return nil, errors.New("This AP cannot restore native Wi-Fi 7 settings")
+			}
+			has6GHz := false
+			for _, br := range b.Radios {
+				if br.Band == "6" && br.Enabled {
+					has6GHz = true
+				}
+			}
+			if !has6GHz {
+				return nil, errors.New("Include an enabled 6 GHz radio when restoring its Wi-Fi 7 settings")
+			}
+		}
 		var entries []any
 		for _, br := range b.Radios {
+			if br.Band == "6" && !br.Enabled && b.WiFi7 != nil {
+				return nil, errors.New("Enable the 6 GHz radio when restoring its Wi-Fi 7 settings")
+			}
 			id := -1
 			for _, radio := range a.poller.Snapshot().Radios {
 				if radio.Band == br.Band {
@@ -330,6 +354,7 @@ func (a *API) planRestore(req restoreRequest) (*restorePlan, error) {
 func utf8Len(s string) int { return len([]rune(s)) }
 
 func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(4 * time.Minute))
 	var req restoreRequest
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	dec := json.NewDecoder(r.Body)
@@ -348,7 +373,7 @@ func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		fail(w, code, err.Error())
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 4*time.Minute)
 	defer cancel()
 	var applied []string
 	// Wi-Fi and radios in one transaction, so the AP restarts Wi-Fi once.
@@ -365,6 +390,23 @@ func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	b := req.Backup
 	var problems []string
+	if req.Sections.Radios && b.WiFi7 != nil {
+		fallback := 160
+		for _, br := range b.Radios {
+			if br.Band == "6" {
+				fallback = br.Width
+			}
+		}
+		nativeCtx, stop := context.WithTimeout(context.Background(), 90*time.Second)
+		if err := a.wifi7.Update(nativeCtx, *b.WiFi7, fallback); err != nil {
+			problems = append(problems, "Wi-Fi 7: "+err.Error())
+		} else {
+			applied = append(applied, "6 GHz Wi-Fi mode")
+		}
+		stop()
+	} else if err := a.ensureWiFi7(); err != nil {
+		problems = append(problems, "Wi-Fi 7: "+err.Error())
+	}
 	if req.Sections.Labels {
 		if err := a.cfg.SetLabels(strings.TrimSpace(b.Labels.SiteName), b.Labels.VLANNames); err != nil {
 			problems = append(problems, "names: "+err.Error())

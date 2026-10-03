@@ -27,28 +27,29 @@ type APState struct {
 }
 
 type Radio struct {
-	ID              int      `json:"id"`
-	Band            string   `json:"band"`
-	Frequency       string   `json:"frequency"`
-	Enabled         bool     `json:"enabled"`
-	Channel         int      `json:"channel"`
-	Width           int      `json:"width"`
-	PowerRequested  int      `json:"powerRequested"`
-	EIRP            *float64 `json:"eirp"`
-	MaxEIRP         *float64 `json:"maxEirp"`
-	MaxTxPower      *float64 `json:"maxTxPower"`
-	AllowedChannels []int    `json:"allowedChannels"`
-	Utilization     *float64 `json:"utilization"`
-	RxUtilization   *float64 `json:"rxUtilization"`
-	TxUtilization   *float64 `json:"txUtilization"`
-	NoiseFloor      *float64 `json:"noiseFloor"`
-	DCA             bool     `json:"dca"`
-	DTP             bool     `json:"dtp"`
-	Scanning        bool     `json:"scanning"`
-	BaseMAC         string   `json:"baseMac"`
-	Clients         int      `json:"clients"`
-	BSSIDs          int      `json:"bssids"`
-	Neighbors       int      `json:"neighbors"`
+	ID              int         `json:"id"`
+	Band            string      `json:"band"`
+	Frequency       string      `json:"frequency"`
+	Enabled         bool        `json:"enabled"`
+	Channel         int         `json:"channel"`
+	Width           int         `json:"width"`
+	PowerRequested  int         `json:"powerRequested"`
+	EIRP            *float64    `json:"eirp"`
+	MaxEIRP         *float64    `json:"maxEirp"`
+	MaxTxPower      *float64    `json:"maxTxPower"`
+	AllowedChannels []int       `json:"allowedChannels"`
+	Utilization     *float64    `json:"utilization"`
+	RxUtilization   *float64    `json:"rxUtilization"`
+	TxUtilization   *float64    `json:"txUtilization"`
+	NoiseFloor      *float64    `json:"noiseFloor"`
+	DCA             bool        `json:"dca"`
+	DTP             bool        `json:"dtp"`
+	Scanning        bool        `json:"scanning"`
+	BaseMAC         string      `json:"baseMac"`
+	Clients         int         `json:"clients"`
+	BSSIDs          int         `json:"bssids"`
+	Neighbors       int         `json:"neighbors"`
+	WiFi7           *WiFi7State `json:"wifi7,omitempty"`
 }
 
 type BSSID struct {

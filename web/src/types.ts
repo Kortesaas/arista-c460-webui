@@ -47,6 +47,21 @@ export interface Radio {
   clients: number
   bssids: number
   neighbors: number
+  wifi7?: WiFi7State
+}
+
+export interface WiFi7Settings {
+  enabled: boolean
+  width: number
+}
+
+export interface WiFi7State {
+  supported: boolean
+  saved: WiFi7Settings | null
+  operatingMode: string
+  operatingWidth: number
+  status: 'off' | 'pending' | 'active' | 'error'
+  error?: string
 }
 
 export interface Bssid {
@@ -305,6 +320,7 @@ export interface ConfigBackup {
   ssids: { name: string; enabled: boolean; hidden: boolean; opmode: string; bands: Band[]; vlan: number | null; isolation: boolean }[]
   radios: { band: Band; enabled: boolean; channel: number; width: number; power: number; dca: boolean; dtp: boolean }[]
   management?: ManagementInput
+  wifi7?: WiFi7Settings
   labels: { siteName: string; vlanNames: Record<string, string> | null }
   time?: { primary: string; secondary: string }
   lldp?: { interval: number; hold: number }

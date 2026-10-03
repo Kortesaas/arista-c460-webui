@@ -87,7 +87,7 @@ export function OverviewPage() {
                   </div>
                   <p className="tabular mt-2.5 text-lg font-semibold leading-6 text-ink">
                     Ch {radio.channel}
-                    <span className="ml-1.5 text-[13px] font-normal text-muted">{radio.width} MHz</span>
+                    <span className="ml-1.5 text-[13px] font-normal text-muted">{radio.wifi7?.operatingWidth || radio.width} MHz</span>
                     {isDfs(radio.band, radio.channel) && <span className="ml-1.5 text-2xs font-semibold text-warn">DFS</span>}
                   </p>
                   <p className="tabular text-[12px] text-muted">

@@ -31,6 +31,7 @@ type API struct {
 	changes         *ChangeLog
 	history         *History
 	overrides       *WirelessOverrides
+	wifi7           *NativeWiFi7
 	scheduler       Scheduler
 	defaultPassword defaultPasswordCheck
 	cliTrigger      chan struct{}
@@ -77,6 +78,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.Handle("PUT /api/ssids/{name}/schedule", a.write(a.updateSchedule))
 	mux.Handle("GET /api/ssids/{name}/join", a.write(a.joinCode)) // reveals the password
 	mux.Handle("PUT /api/radios/{id}", a.write(a.updateRadio))
+	mux.Handle("PUT /api/radios/{id}/wifi7", a.write(a.updateWiFi7))
 	mux.Handle("POST /api/batch", a.write(a.applyBatch))
 	mux.Handle("PUT /api/management", a.write(a.updateManagement))
 	mux.Handle("PUT /api/lldp", a.write(a.updateLLDP))
@@ -410,6 +412,7 @@ func (a *API) ssidLeaf(name, leaf string) *gpb.Path {
 }
 
 func (a *API) apply(w http.ResponseWriter, r *http.Request, what string, body map[string]any, deletes []*gpb.Path) {
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(4 * time.Minute))
 	if err := a.gnmi.SetAP(r.Context(), body, deletes); err != nil {
 		msg := err.Error()
 		if s, ok := status.FromError(err); ok {
@@ -421,6 +424,10 @@ func (a *API) apply(w http.ResponseWriter, r *http.Request, what string, body ma
 	}
 	log.Printf("%s applied by %s", what, clientIP(r))
 	a.poller.Refresh()
+	if err := a.ensureWiFi7(); err != nil {
+		fail(w, http.StatusBadGateway, "The change was saved, but restoring Wi-Fi 7 failed: "+err.Error())
+		return
+	}
 	reply(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -604,7 +611,7 @@ func (a *API) radioEntry(id int, req radioRequest) (map[string]any, error) {
 	}
 	b := band(freq)
 	if req.Width == 320 && b == "6" {
-		return nil, errors.New("This firmware's OpenConfig API cannot set 320 MHz; use 160 MHz. A native 320 MHz configuration path has not been verified")
+		return nil, errors.New("Use the Wi-Fi 7 controls to select 320 MHz; use 160 MHz or less for OpenConfig radio settings")
 	}
 	snapshot := a.poller.Snapshot()
 	for _, radio := range snapshot.Radios {
