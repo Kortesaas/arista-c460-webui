@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"mime"
 	"net/http"
@@ -20,11 +21,12 @@ import (
 )
 
 type API struct {
-	cfg     *Config
-	auth    *Auth
-	gnmi    *GNMI
-	poller  *Poller
-	writeMu sync.Mutex // one configuration change at a time
+	endpoints []apiEndpoint
+	cfg       *Config
+	auth      *Auth
+	gnmi      *GNMI
+	poller    *Poller
+	writeMu   sync.Mutex // one configuration change at a time
 
 	cli             *CLIInfo
 	snmp            *SNMPAgent
@@ -45,57 +47,80 @@ type API struct {
 }
 
 func (a *API) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/session", a.session)
-	mux.HandleFunc("POST /api/login", a.login)
-	mux.HandleFunc("POST /api/logout", a.logout)
+	register := func(pattern string, handler http.Handler) {
+		a.endpoints = append(a.endpoints, apiEndpoint{Pattern: pattern})
+		mux.Handle(pattern, handler)
+		v1 := strings.Replace(pattern, "/api/", "/api/v1/", 1)
+		mux.Handle(v1, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-API-Version", "1")
+			r.Pattern = pattern // preserve audit descriptions and permission checks
+			handler.ServeHTTP(w, r)
+		}))
+	}
+
+	register("GET /api/session", http.HandlerFunc(a.session))
+	register("POST /api/login", http.HandlerFunc(a.login))
+	register("POST /api/logout", http.HandlerFunc(a.logout))
 
 	// Read access, also for the read-only account.
-	mux.Handle("GET /api/state", a.read(a.state))
-	mux.Handle("GET /api/network", a.read(a.networkStatus))
-	mux.Handle("GET /api/events", a.read(a.wirelessEvents))
-	mux.Handle("GET /api/changes", a.read(a.changeLog))
-	mux.Handle("GET /api/history", a.read(a.historyHandler))
-	mux.Handle("GET /api/clients/{mac}/history", a.read(a.clientHistory))
-	mux.Handle("GET /api/ssids/{name}/features", a.read(a.getSSIDFeatures))
-	mux.Handle("GET /api/radios/{id}/features", a.read(a.radioFeatures))
-	mux.Handle("GET /api/lldp", a.read(a.getLLDP))
-	mux.Handle("GET /api/trust", a.read(a.trust))
-	mux.Handle("GET /api/snmp", a.read(a.snmpSettings))
-	mux.Handle("GET /api/metrics", a.read(a.metricsSettings))
-	mux.Handle("GET /api/time", a.read(a.timeSettings))
-	mux.Handle("GET /api/wireless-status", a.read(a.wirelessStatus))
-	mux.Handle("GET /api/clients/{mac}/details", a.read(a.clientDetails))
-	mux.Handle("POST /api/diagnostics", a.read(a.diagnose)) // tests only observe
+	register("GET /api/state", a.read(a.state))
+	register("GET /api/network", a.read(a.networkStatus))
+	register("GET /api/events", a.read(a.wirelessEvents))
+	register("GET /api/changes", a.read(a.changeLog))
+	register("GET /api/history", a.read(a.historyHandler))
+	register("GET /api/clients/{mac}/history", a.read(a.clientHistory))
+	register("GET /api/ssids/{name}/features", a.read(a.getSSIDFeatures))
+	register("GET /api/radios/{id}/features", a.read(a.radioFeatures))
+	register("GET /api/lldp", a.read(a.getLLDP))
+	register("GET /api/trust", a.read(a.trust))
+	register("GET /api/snmp", a.read(a.snmpSettings))
+	register("GET /api/metrics", a.read(a.metricsSettings))
+	register("GET /api/time", a.read(a.timeSettings))
+	register("GET /api/wireless-status", a.read(a.wirelessStatus))
+	register("GET /api/clients/{mac}/details", a.read(a.clientDetails))
+	register("POST /api/diagnostics", a.read(a.diagnose)) // tests only observe
 
 	// Changes, administrator only; each one is written to the change log.
-	mux.Handle("POST /api/password", a.write(a.changePassword))
-	mux.Handle("PUT /api/viewer", a.write(a.setViewer))
-	mux.Handle("DELETE /api/viewer", a.write(a.removeViewer))
-	mux.Handle("PUT /api/refresh", a.write(a.updateRefresh))
-	mux.Handle("POST /api/ssids", a.write(a.createSSID))
-	mux.Handle("PUT /api/ssids/{name}", a.write(a.updateSSID))
-	mux.Handle("DELETE /api/ssids/{name}", a.write(a.deleteSSID))
-	mux.Handle("PUT /api/ssids/{name}/features", a.write(a.updateSSIDFeatures))
-	mux.Handle("PUT /api/ssids/{name}/schedule", a.write(a.updateSchedule))
-	mux.Handle("GET /api/ssids/{name}/join", a.write(a.joinCode)) // reveals the password
-	mux.Handle("PUT /api/radios/{id}", a.write(a.updateRadio))
-	mux.Handle("PUT /api/radios/{id}/features", a.write(a.updateRadioFeatures))
-	mux.Handle("PUT /api/radios/{id}/wifi7", a.write(a.updateWiFi7))
-	mux.Handle("POST /api/batch", a.write(a.applyBatch))
-	mux.Handle("PUT /api/management", a.write(a.updateManagement))
-	mux.Handle("PUT /api/lldp", a.write(a.updateLLDP))
-	mux.Handle("PUT /api/time", a.write(a.updateTime))
-	mux.Handle("PUT /api/timezone", a.write(a.updateTimeZone))
-	mux.Handle("PUT /api/snmp", a.write(a.updateSNMP))
-	mux.Handle("PUT /api/metrics", a.write(a.updateMetrics))
-	mux.Handle("PUT /api/settings", a.write(a.updateSettings))
-	mux.Handle("PUT /api/ssh", a.write(a.updateSSH))
-	mux.Handle("POST /api/reboot", a.write(a.reboot))
-	mux.Handle("POST /api/locate", a.write(a.locate))
-	mux.Handle("DELETE /api/locate", a.write(a.stopLocate))
-	mux.Handle("POST /api/backup", a.write(a.createBackup))
-	mux.Handle("POST /api/restore", a.write(a.restoreBackup))
-	mux.Handle("POST /api/clients/{mac}/reconnect", a.write(a.reconnectClient))
+	register("POST /api/password", a.write(a.changePassword))
+	register("PUT /api/viewer", a.write(a.setViewer))
+	register("DELETE /api/viewer", a.write(a.removeViewer))
+	register("PUT /api/refresh", a.write(a.updateRefresh))
+	register("POST /api/ssids", a.write(a.createSSID))
+	register("PUT /api/ssids/{name}", a.write(a.updateSSID))
+	register("DELETE /api/ssids/{name}", a.write(a.deleteSSID))
+	register("PUT /api/ssids/{name}/features", a.write(a.updateSSIDFeatures))
+	register("PUT /api/ssids/{name}/schedule", a.write(a.updateSchedule))
+	register("GET /api/ssids/{name}/join", a.write(a.joinCode)) // reveals the password
+	register("PUT /api/radios/{id}", a.write(a.updateRadio))
+	register("PUT /api/radios/{id}/features", a.write(a.updateRadioFeatures))
+	register("PUT /api/radios/{id}/wifi7", a.write(a.updateWiFi7))
+	register("POST /api/batch", a.write(a.applyBatch))
+	register("PUT /api/management", a.write(a.updateManagement))
+	register("PUT /api/lldp", a.write(a.updateLLDP))
+	register("PUT /api/time", a.write(a.updateTime))
+	register("PUT /api/timezone", a.write(a.updateTimeZone))
+	register("PUT /api/snmp", a.write(a.updateSNMP))
+	register("PUT /api/metrics", a.write(a.updateMetrics))
+	register("PUT /api/settings", a.write(a.updateSettings))
+	register("PUT /api/ssh", a.write(a.updateSSH))
+	register("POST /api/reboot", a.write(a.reboot))
+	register("POST /api/locate", a.write(a.locate))
+	register("DELETE /api/locate", a.write(a.stopLocate))
+	register("POST /api/backup", a.write(a.createBackup))
+	register("POST /api/restore", a.write(a.restoreBackup))
+	register("POST /api/clients/{mac}/reconnect", a.write(a.reconnectClient))
+	register("GET /api/tokens", a.write(a.listTokens))
+	register("POST /api/tokens", a.write(a.createToken))
+	register("DELETE /api/tokens/{id}", a.write(a.revokeToken))
+	register("GET /api/openapi.json", a.read(a.openAPI))
+	register("GET /api/docs", a.read(a.apiDocs))
+	register("GET /api/capabilities", a.read(a.capabilities))
+	for _, resource := range []string{"device", "radios", "ssids", "clients", "neighbors", "interfaces", "health", "management", "settings"} {
+		register("GET /api/"+resource, a.read(a.resource))
+	}
+	register("GET /api/radios/{id}", a.read(a.radioResource))
+	register("GET /api/ssids/{name}", a.read(a.ssidResource))
+	register("GET /api/clients/{mac}", a.read(a.clientResource))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { fail(w, http.StatusNotFound, "unknown endpoint") })
 }
 
@@ -112,13 +137,21 @@ func (a *API) guard(h http.HandlerFunc, admin bool) http.Handler {
 			fail(w, http.StatusUnauthorized, "not signed in")
 			return
 		}
+		if s.TokenID != "" {
+			for _, scope := range tokenPermissions(r.Pattern) {
+				if !slices.Contains(s.Scopes, scope) {
+					fail(w, http.StatusForbidden, "API token requires permission: "+scope)
+					return
+				}
+			}
+		}
 		if r.Method != http.MethodGet && r.Method != http.MethodDelete {
 			if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "application/json" {
 				fail(w, http.StatusUnsupportedMediaType, "expected application/json")
 				return
 			}
 		}
-		if r.Method == http.MethodDelete && r.Header.Get("X-Requested-With") == "" {
+		if r.Method == http.MethodDelete && s.TokenID == "" && r.Header.Get("X-Requested-With") == "" {
 			fail(w, http.StatusForbidden, "missing X-Requested-With header")
 			return
 		}
@@ -130,6 +163,16 @@ func (a *API) guard(h http.HandlerFunc, admin bool) http.Handler {
 			fail(w, http.StatusForbidden, "This account is read-only.")
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/api/v1/") && (len(requiredFields(r.Pattern)) > 0 || r.Pattern == "POST /api/batch") {
+			if err := validateCompleteSettings(r.Pattern, requestFields(r)); err != nil {
+				fail(w, 400, err.Error())
+				return
+			}
+		}
+		if r.Pattern == "GET /api/tokens" {
+			h(w, r)
+			return
+		} // no flash write for a metadata read
 		// Describe before running, while the current state is still the old one.
 		action := a.describeChange(r, requestFields(r))
 		rec := &recorder{ResponseWriter: w}
@@ -149,7 +192,7 @@ func (a *API) guard(h http.HandlerFunc, admin bool) http.Handler {
 // isAdmin reports whether the caller may see secrets such as communities.
 func (a *API) isAdmin(r *http.Request) bool {
 	s, ok := a.auth.Session(r)
-	return ok && s.Role == RoleAdmin
+	return ok && s.Role == RoleAdmin && (s.TokenID == "" || slices.Contains(s.Scopes, "secrets"))
 }
 
 func reply(w http.ResponseWriter, code int, v any) {
@@ -169,6 +212,10 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		fail(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return false
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		fail(w, http.StatusBadRequest, "expected one JSON object")
 		return false
 	}
 	return true

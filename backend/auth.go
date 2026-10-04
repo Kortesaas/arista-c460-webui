@@ -31,6 +31,7 @@ type Auth struct {
 	file     string
 	sessions map[string]Session
 	failures map[string][]time.Time
+	tokens   *TokenStore
 }
 
 type Role string
@@ -43,6 +44,8 @@ const (
 type Session struct {
 	User    string
 	Role    Role
+	TokenID string
+	Scopes  []string
 	expires time.Time
 }
 
@@ -61,7 +64,7 @@ type authFile struct {
 const DefaultUsername = "config"
 
 func NewAuth(file string) *Auth {
-	return &Auth{file: file, sessions: map[string]Session{}, failures: map[string][]time.Time{}}
+	return &Auth{file: file, sessions: map[string]Session{}, failures: map[string][]time.Time{}, tokens: NewTokenStore(file + ".tokens.json")}
 }
 
 func (a *Auth) load() (authFile, error) {
@@ -276,6 +279,13 @@ func (a *Auth) NewSession(w http.ResponseWriter, user string, role Role) error {
 
 // Session returns the caller's session, if it is valid.
 func (a *Auth) Session(r *http.Request) (Session, bool) {
+	if authorization := r.Header.Get("Authorization"); authorization != "" {
+		parts := strings.Fields(authorization)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || a.tokens == nil {
+			return Session{}, false
+		}
+		return a.tokens.authenticate(parts[1])
+	}
 	c, err := r.Cookie(sessionCookie)
 	if err != nil {
 		return Session{}, false

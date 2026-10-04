@@ -6,6 +6,7 @@ import { DisplaySettingsPanel, MaintenancePanel } from '@/components/SystemSetti
 import { RefreshPanel } from '@/components/RefreshSettings'
 import { BackupPanel } from '@/components/Backup'
 import { ViewerPanel } from '@/components/ViewerAccount'
+import { ApiAccessPanel } from '@/components/ApiAccess'
 import { Meter } from '@/components/status'
 import { cn } from '@/ui/cn'
 import { api } from '@/api'
@@ -76,6 +77,7 @@ export function SystemPage() {
         <div className="min-w-0 space-y-3">
           {isAdmin && <PasswordPanel />}
           <ViewerPanel />
+          {isAdmin && <ApiAccessPanel />}
           <Panel title="About">
             <p className="text-[12px] leading-5 text-muted">
               ARRR-ISTA C460 web interface <span className="mono text-ink">{device.uiVersion}</span>. Runs on the access point and manages it through the AP’s own

@@ -1,4 +1,6 @@
 import type {
+  AccessToken,
+  ApiScope,
   ApState,
   ManagementInput,
   RadioInput,
@@ -57,6 +59,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 export const api = {
+  tokens: () => call<{ tokens: AccessToken[] }>('GET', '/api/tokens'),
+  createToken: (name: string, scopes: ApiScope[], expiresDays: number) => call<{ token: string; access: AccessToken }>('POST', '/api/tokens', { name, scopes, expiresDays }),
+  revokeToken: (id: string) => call('DELETE', `/api/tokens/${encodeURIComponent(id)}`),
   backup: (passphrase: string) => call<ConfigBackup>('POST', '/api/backup', { passphrase }),
   restore: (backup: ConfigBackup, passphrase: string, sections: RestoreSections, removeOthers: boolean, management?: ManagementInput) =>
     call<RestoreResult>('POST', '/api/restore', { backup, passphrase, sections, removeOthers, management }),

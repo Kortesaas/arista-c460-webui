@@ -426,3 +426,11 @@ export type StagedChange =
   | { kind: 'ssid-update'; name: string; ssid: SsidInput }
   | { kind: 'ssid-delete'; name: string }
   | { kind: 'radio'; id: number; radio: RadioInput }
+export type ApiScope = 'monitor' | 'configure' | 'control' | 'secrets'
+export interface AccessToken {
+  id: string
+  name: string
+  scopes: ApiScope[]
+  createdAt: string
+  expiresAt: string | null
+}

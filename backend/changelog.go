@@ -133,6 +133,12 @@ func quoted(v any) string {
 func (a *API) describeChange(r *http.Request, f map[string]any) string {
 	name := quoted(r.PathValue("name"))
 	switch r.Pattern {
+	case "POST /api/tokens":
+		return "Created API token " + quoted(f["name"])
+	case "DELETE /api/tokens/{id}":
+		return "Revoked API token " + r.PathValue("id")
+	case "GET /api/tokens":
+		return "Viewed API access tokens"
 	case "POST /api/password":
 		return "Changed the administrator login"
 	case "PUT /api/viewer":

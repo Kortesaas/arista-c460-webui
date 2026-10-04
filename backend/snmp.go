@@ -598,5 +598,9 @@ func (a *API) updateSNMP(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	reply(w, http.StatusOK, a.snmp.status(a.snmp.Apply()))
+	st := a.snmp.status(a.snmp.Apply())
+	if !a.isAdmin(r) {
+		st.Community = ""
+	}
+	reply(w, http.StatusOK, st)
 }

@@ -75,6 +75,9 @@ func (a *API) updateMetrics(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, "Could not save metrics settings")
 		return
 	}
+	if !a.isAdmin(r) {
+		m.Token = ""
+	}
 	reply(w, http.StatusOK, m)
 }
 

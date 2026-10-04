@@ -271,6 +271,25 @@ That is why everything this project installs lives in `/opt/c460-webui/`, with o
 
 ---
 
+## Local API for integrations
+
+Computers on the management network can monitor and configure the AP through
+`/api/v1` on its existing HTTP/HTTPS listener. In **System → API access**, create
+a named, revocable token for each integration. Monitoring is included; extra
+permissions cover configuration, device actions, and secrets. Tokens are stored
+as hashes, survive restarts, and can expire automatically.
+
+See the [complete API guide](docs/api.md), [Python client](examples/c460_client.py),
+and the AP's `/api/v1/openapi.json` specification. The guide covers all endpoints,
+request bodies, polling cadence, operational effects, authentication, and errors.
+The API guide and specification are also linked directly from System.
+
+```bash
+# Set C460_URL, C460_TOKEN and C460_CA for your AP first (see the API guide).
+python3 examples/c460_client.py GET device
+python3 examples/c460_client.py GET 'clients?ssid=FOH-MGMT'
+```
+
 ## Development
 
 ```bash
@@ -289,7 +308,8 @@ Backend: `backend/` (`gnmi.go` agent client, `state.go` state model, `api.go` HT
 backend/   Go HTTP API, AP integrations, and backend tests
 web/       React interface and embedded frontend assets
 deploy/    AP installer, service script, and firmware trust checks
-docs/      Technical notes and feature coverage
+docs/      Technical notes, feature coverage, and embedded API guide
+examples/  Standard-library Python integration client and tests
 Makefile   Build, development, and verification commands
 go.mod     Shared Go module (with go.sum for dependency checksums)
 ```

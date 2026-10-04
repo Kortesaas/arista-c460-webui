@@ -8,3 +8,7 @@
 *.secret.json
 /secrets/
 /deploy/*.local.json
+
+# Python integration examples
+__pycache__/
+*.pyc
