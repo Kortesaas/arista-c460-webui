@@ -24,6 +24,8 @@ type Device struct {
 	Country       string   `json:"country"`
 	UptimeSeconds float64  `json:"uptimeSeconds"`
 	Load          []string `json:"load"`
+	CPUUsage      *float64 `json:"cpuUsage"`
+	CPUCores      int      `json:"cpuCores"`
 	MemTotal      uint64   `json:"memTotal"`
 	MemAvailable  uint64   `json:"memAvailable"`
 	StorageTotal  uint64   `json:"storageTotal"`

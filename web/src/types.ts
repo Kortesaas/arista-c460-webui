@@ -15,6 +15,8 @@ export interface Device {
   country: string
   uptimeSeconds: number
   load: string[]
+  cpuUsage: number | null
+  cpuCores: number
   memTotal: number
   memAvailable: number
   storageTotal: number

@@ -60,14 +60,18 @@ export function SystemPage() {
             <p className="tabular mt-1 text-[11px] text-faint">{formatBytes(device.storageFree)} free</p>
           </div>
           <div>
-            <div className="mb-1 flex items-center justify-between text-[11px]">
-              <span className="flex items-center gap-1 text-faint">
-                CPU load
-                <HelpTip label="CPU load">Average number of busy processes over 1, 5 and 15 minutes. The AP has four cores, so values below 4 mean it is not overloaded.</HelpTip>
+            <Meter value={device.cpuUsage ?? null} label="CPU usage" warnAt={75} dangerAt={90} />
+            <p className="mt-1 text-[11px] text-faint">
+              {device.cpuCores ? `Across ${device.cpuCores} cores` : 'Waiting for a CPU sample'}
+              <HelpTip label="CPU usage">Measured CPU activity across all cores between updates. The first reading appears after two samples.</HelpTip>
+            </p>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px]">
+              <span className="flex items-center gap-1 text-faint">Load average
+                <HelpTip label="Load average">Average number of tasks running, ready to run, or waiting in an uninterruptible state over 1, 5 and 15 minutes. These numbers are not CPU percentages and can stay elevated after activity ends.</HelpTip>
               </span>
               <span className="tabular text-muted">{device.load.join(' · ') || '—'}</span>
             </div>
-            <Meter value={device.load[0] ? Math.min(100, (Number(device.load[0]) / 4) * 100) : null} warnAt={60} dangerAt={90} />
+            <p className="mt-0.5 text-[10px] text-faint">1 / 5 / 15 minutes</p>
           </div>
         </div>
       </Panel>

@@ -133,6 +133,7 @@ type Interface struct {
 // ------------------------------------------------------------------ poller
 
 type Poller struct {
+	cpu      cpuSampler
 	gnmi     *GNMI
 	cfg      *Config
 	interval time.Duration
@@ -212,6 +213,7 @@ func (p *Poller) poll(ctx context.Context) {
 
 func (p *Poller) sample(ctx context.Context) (APState, bool) {
 	device := readDevice(p.cfg)
+	device.CPUUsage, device.CPUCores = p.cpu.Sample()
 	raw, err := p.gnmi.GetAP(ctx)
 	var tree map[string]any
 	if err == nil {
