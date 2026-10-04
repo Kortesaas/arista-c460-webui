@@ -85,7 +85,7 @@ export function NetworkPathsPanel() {
         {data && <p className="mt-3 text-[11px] text-faint">Sampled {new Date(data.sampledAt).toLocaleTimeString()}. Snapshots are cached for up to five seconds.</p>}
       </Panel>
       {data && (
-        <>
+        <div className="grid items-start gap-3 2xl:grid-cols-2">
           <Panel title="Management routes" bodyClassName="p-0">
             <p className="border-b border-line px-3 py-2 text-[11px] text-faint">IPv4 and IPv6 routes. Link-local IPv6 routes are omitted.</p>
             <div className="overflow-x-auto">
@@ -165,7 +165,7 @@ export function NetworkPathsPanel() {
             </div>
             {!data.neighbors.length && <p className="p-3 text-[12px] text-muted">No neighbours learned yet.</p>}
           </Panel>
-        </>
+        </div>
       )}
     </div>
   )
@@ -241,7 +241,7 @@ export function WirelessEventsPanel() {
       bodyClassName="p-0"
     >
       <div className="border-b border-line p-3">
-        <div className="grid gap-2 sm:grid-cols-[1fr_150px]">
+        <div className="grid max-w-2xl gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
           <div className="relative">
             <Search size={13} className="absolute left-2 top-2.5 text-faint" />
             <Input className="pl-7" aria-label="Filter wireless events" placeholder="Network, client or event" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -265,7 +265,8 @@ export function WirelessEventsPanel() {
         </p>
       )}
       <div className="max-h-[480px] overflow-auto">
-        <table className="w-full min-w-[640px] text-left text-[12px]">
+        <table className="w-full min-w-[800px] table-fixed text-left text-[12px]">
+          <colgroup><col className="w-28" /><col className="w-52" /><col /><col className="w-44" /></colgroup>
           <thead className="sticky top-0 border-b border-line bg-surface text-faint">
             <tr>
               {['Time', 'Network', 'Event', 'Client'].map((h) => (

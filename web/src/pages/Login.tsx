@@ -41,11 +41,11 @@ export function LoginPage() {
       <div className="h-1.5 shrink-0 bg-brand-bar" />
       <div className="grid flex-1 place-items-center overflow-auto p-4">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center text-brand">
-          <Brand height={100} />
+        <div className="mb-5 flex flex-col items-center text-brand">
+          <Brand height={88} />
           <p className="mt-3 text-[12px] font-medium uppercase tracking-[0.18em] text-muted">Access point management</p>
         </div>
-        <form onSubmit={(event) => void submit(event)} className="rounded-lg border border-line bg-surface p-4 shadow-card">
+        <form onSubmit={(event) => void submit(event)} className="rounded-lg border border-line bg-surface p-4 shadow-card sm:p-5">
           <h1 className="mb-1 text-base font-semibold text-ink">Sign in</h1>
           <p className="mb-4 text-[12px] leading-5 text-muted">
             {configured ? 'Use the administrator account of this access point.' : 'No administrator account has been set up on this access point yet. Set one during installation (see README).'}

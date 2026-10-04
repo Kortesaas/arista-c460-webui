@@ -10,7 +10,7 @@ import { Meter } from '@/components/status'
 import { cn } from '@/ui/cn'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
-import { Button, Field, HelpTip, Input, Panel, Spinner } from '@/ui/kit'
+import { Button, Field, Input, Panel, Spinner } from '@/ui/kit'
 import { formatBytes, formatDuration } from '@/utils/format'
 
 export function SystemPage() {
@@ -35,7 +35,7 @@ export function SystemPage() {
     { label: '6 GHz power class', value: hardware?.radioPower || '—' },
   ]
   return (
-    <Page title="System" description="Device information, maintenance and access to this interface.">
+    <Page title="System" description="Device information, maintenance and access to this interface." width="settings">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {facts.map((fact) => (
           <div key={fact.label} className="min-w-0 rounded-lg border border-line bg-surface px-3 py-2.5">
@@ -61,30 +61,19 @@ export function SystemPage() {
           </div>
           <div>
             <Meter value={device.cpuUsage ?? null} label="CPU usage" warnAt={75} dangerAt={90} />
-            <p className="mt-1 text-[11px] text-faint">
-              {device.cpuCores ? `Across ${device.cpuCores} cores` : 'Waiting for a CPU sample'}
-              <HelpTip label="CPU usage">Measured CPU activity across all cores between updates. The first reading appears after two samples.</HelpTip>
-            </p>
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px]">
-              <span className="flex items-center gap-1 text-faint">Load average
-                <HelpTip label="Load average">Average number of tasks running, ready to run, or waiting in an uninterruptible state over 1, 5 and 15 minutes. These numbers are not CPU percentages and can stay elevated after activity ends.</HelpTip>
-              </span>
-              <span className="tabular text-muted">{device.load.join(' · ') || '—'}</span>
-            </div>
-            <p className="mt-0.5 text-[10px] text-faint">1 / 5 / 15 minutes</p>
           </div>
         </div>
       </Panel>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+      <div className="mt-3 grid items-start gap-3 xl:grid-cols-2">
         {/* Left: the device itself. Right: names, logins and the interface. */}
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
+          <DisplaySettingsPanel state={state} />
           <MaintenancePanel state={state} />
           <BackupPanel />
           <RefreshPanel />
         </div>
-        <div className="space-y-3">
-          <DisplaySettingsPanel state={state} />
+        <div className="min-w-0 space-y-3">
           {isAdmin && <PasswordPanel />}
           <ViewerPanel />
           <Panel title="About">

@@ -48,7 +48,7 @@ export function ScanPage() {
 
   return (
     <Page title="RF environment" description={`${state.neighbors.length} other access points heard, ${strong} of them strong enough to interfere.`}>
-      <div className="grid gap-3 xl:grid-cols-3">
+      <div className="grid items-start gap-3 xl:grid-cols-3">
         {BANDS.filter((b) => radios.has(b)).map((b) => {
           const radio = radios.get(b)!
           const count = state.neighbors.filter((n) => n.band === b).length
@@ -102,7 +102,15 @@ export function ScanPage() {
           <EmptyState icon={<Radar size={28} />} title="No matching networks" description="Nothing heard with the current filter." />
         ) : (
           <div className="max-h-[520px] overflow-auto">
-            <table className="w-full min-w-[720px] text-left text-[13px]">
+          <table className="w-full min-w-[800px] table-fixed text-left text-[13px]">
+            <colgroup>
+              <col />
+              <col className="w-24" />
+              <col className="w-24" />
+              <col className="w-36" />
+              <col className="w-40" />
+              <col className="w-24" />
+            </colgroup>
               <thead className="sticky top-0 z-10 border-b border-line bg-surface text-2xs font-semibold text-faint">
                 <tr>
                   {header('ssid', 'Network')}

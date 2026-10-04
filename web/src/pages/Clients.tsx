@@ -26,13 +26,13 @@ export function ClientsPage() {
     <Page
       title="Clients"
       description="Devices currently associated with this access point."
-      actions={
-        <>
-          <div className="relative w-56">
+    >
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface p-3">
+          <div className="relative min-w-[180px] flex-1 sm:max-w-sm">
             <Search size={13} className="pointer-events-none absolute left-2 top-2.5 text-faint" />
             <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="MAC, IP, hostname…" className="pl-7" aria-label="Filter clients" />
           </div>
-          <div className="w-44">
+          <div className="w-full sm:w-48">
           <Select value={ssid} onChange={(event) => setSsid(event.target.value)} aria-label="Network">
             <option value="">All networks</option>
             {state.ssids.map((item) => (
@@ -42,9 +42,8 @@ export function ClientsPage() {
             ))}
           </Select>
           </div>
-        </>
-      }
-    >
+          <span className="ml-auto text-[12px] text-faint">{clients.length} of {state.clients.length} shown</span>
+      </div>
       {clients.length === 0 ? (
         <Panel>
           <EmptyState
@@ -54,8 +53,35 @@ export function ClientsPage() {
           />
         </Panel>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-line bg-surface">
-          <table className="w-full min-w-[900px] text-left text-[13px]">
+        <>
+        <ul className="space-y-2 md:hidden">
+          {clients.map((client) => (
+            <li key={`${client.ssid}-${client.mac}`} className="rounded-lg border border-line bg-surface p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><ClientIdentity client={client} /></div>
+                <Button size="sm" aria-label={`Details for ${client.hostname || client.mac}`} onClick={() => setSelected(client)}>View</Button>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="break-words text-[12px] text-ink">{client.ssid}</span>
+                <VlanChip vlan={client.vlan} />
+                <BandChip band={client.band} />
+                <SignalBars rssi={client.rssi} />
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-line pt-2 text-[11px]">
+                <div><dt className="text-faint">Rate ↓ / ↑</dt><dd className="tabular text-muted">{client.rxRate ?? '—'} / {client.txRate ?? '—'} Mb/s</dd></div>
+                <div><dt className="text-faint">Connected</dt><dd className="text-muted">{client.connectedSince ? <Age iso={client.connectedSince} /> : '—'}</dd></div>
+                <div><dt className="text-faint">Downloaded</dt><dd className="tabular text-muted">{formatBytes(client.rxBytes)}</dd></div>
+                <div><dt className="text-faint">Uploaded</dt><dd className="tabular text-muted">{formatBytes(client.txBytes)}</dd></div>
+              </dl>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto rounded-lg border border-line bg-surface md:block">
+          <table className="w-full min-w-[1200px] table-fixed text-left text-[13px]">
+            <colgroup>
+              <col /><col className="w-52" /><col className="w-24" /><col className="w-32" />
+              <col className="w-16" /><col className="w-36" /><col className="w-40" /><col className="w-24" /><col className="w-16" />
+            </colgroup>
             <thead className="border-b border-line text-2xs font-semibold uppercase tracking-wider text-faint">
               <tr>
                 <th className="px-3 py-2">Client</th>
@@ -73,29 +99,17 @@ export function ClientsPage() {
               {clients.map((client) => (
                 <tr key={`${client.ssid}-${client.mac}`} className="hover:bg-surface-2/50">
                   <td className="px-3 py-2">
-                    {client.hostname || client.ipv4 ? (
-                      <>
-                        <p className="font-medium text-ink">{client.hostname || client.ipv4}</p>
-                        <p className="mono text-[11px] text-faint">
-                          {[client.mac, client.hostname ? client.ipv4 : '', client.os].filter(Boolean).join(' · ')}
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="mono font-medium text-ink">{client.mac}</p>
-                        <p className="text-[11px] text-faint">{client.os || 'No IP address seen yet'}</p>
-                      </>
-                    )}
+                    <ClientIdentity client={client} />
                   </td>
                   <td className="px-3 py-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-ink">{client.ssid}</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="min-w-0 break-words text-ink">{client.ssid}</span>
                       <VlanChip vlan={client.vlan} />
                     </div>
                   </td>
                   <td className="px-3 py-2">
                     <BandChip band={client.band} />
-                    {client.mode && <span className="ml-1 text-[11px] text-faint">{client.mode}</span>}
+                    {client.mode && <span className="mt-1 block truncate text-[11px] text-faint" title={client.mode}>{client.mode}</span>}
                   </td>
                   <td className="px-3 py-2">
                     <SignalBars rssi={client.rssi} />
@@ -105,7 +119,7 @@ export function ClientsPage() {
                     {client.rxRate ?? '—'} / {client.txRate ?? '—'} <span className="text-faint">Mb/s</span>
                   </td>
                   <td className="tabular px-3 py-2 text-right text-[12px] text-faint">
-                    ↓ {formatBytes(client.rxBytes)} · ↑ {formatBytes(client.txBytes)}
+                    <p>↓ {formatBytes(client.rxBytes)}</p><p>↑ {formatBytes(client.txBytes)}</p>
                   </td>
                   <td className="px-3 py-2 text-right text-[12px] text-muted">{client.connectedSince ? <Age iso={client.connectedSince} /> : '—'}</td>
                   <td className="px-3 py-2 text-right">
@@ -118,8 +132,20 @@ export function ClientsPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
       {selected && <ClientDialog client={selected} onClose={() => setSelected(null)} />}
     </Page>
   )
+}
+
+function ClientIdentity({ client }: { client: Client }) {
+  const name = client.hostname || client.ipv4 || client.mac
+  const detail = client.hostname || client.ipv4
+    ? [client.mac, client.hostname ? client.ipv4 : '', client.os].filter(Boolean).join(' · ')
+    : client.os || 'No IP address seen yet'
+  return <>
+    <p className="truncate text-[13px] font-medium text-ink" title={name}>{name}</p>
+    <p className="mono truncate text-[11px] text-faint" title={detail}>{detail}</p>
+  </>
 }

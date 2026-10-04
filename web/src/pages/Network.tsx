@@ -14,11 +14,10 @@ export function NetworkPage() {
   const state = useApp((store) => store.state)
   if (!state) return <LoadingState />
   return (
-    <Page title="Network" description="Management address, Ethernet ports, switch discovery, time and monitoring.">
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className="space-y-3">
+    <Page title="Network" description="Management address, Ethernet ports, switch discovery, time and monitoring." width="settings">
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-3">
           <ManagementPanel state={state} />
-          <TimePanel />
           <Panel title="Monitoring" help="Let network monitors poll this AP: SNMP like your switches, or Prometheus. Both are read-only and off by default." bodyClassName="divide-y divide-line px-3">
             <div className="py-3">
               <SnmpPanel bare />
@@ -27,8 +26,9 @@ export function NetworkPage() {
               <MetricsPanel bare />
             </div>
           </Panel>
+          <TimePanel />
         </div>
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           <Panel
             title="Ethernet ports"
             help="The AP uses one socket as uplink and keeps the other as backup. If the uplink loses its link, the AP restarts on the backup socket."

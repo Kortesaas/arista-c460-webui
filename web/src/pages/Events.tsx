@@ -12,6 +12,7 @@ export function EventsPage() {
   return (
     <Page
       title="Events"
+      width="settings"
       description={tab === 'wireless' ? 'Recent wireless activity: clients joining and leaving, channel changes and radar detection.' : 'Who changed which setting, and when.'}
       actions={
         <Segmented

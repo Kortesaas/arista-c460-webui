@@ -24,7 +24,7 @@ export function RadiosPage() {
       title="Radios"
       description="Channel, width and power for each band. Bars under each radio show how busy its channels are nearby."
     >
-      <div className="grid gap-3 xl:grid-cols-3">
+      <div className="grid items-start gap-3 xl:grid-cols-3">
         {state.radios.map((radio) => (
           <RadioCard key={`${radio.id}-${radio.channel}-${radio.width}-${radio.powerRequested}-${radio.enabled}-${radio.dca}-${radio.dtp}`} radio={radio} />
         ))}
@@ -111,7 +111,7 @@ function RadioCard({ radio }: { radio: Radio }) {
       </div>
 
       {advice && (
-        <div className={`flex items-start gap-2 rounded border px-2.5 py-2 text-[12px] leading-4 ${advice.better ? 'border-accent bg-accent-soft' : 'border-line bg-surface-2'}`}>
+        <div className={`flex min-h-[4rem] items-start gap-2 rounded border px-2.5 py-2 text-[12px] leading-4 ${advice.better ? 'border-accent bg-accent-soft' : 'border-line bg-surface-2'}`}>
           <Lightbulb size={14} className={`mt-px shrink-0 ${advice.better ? 'text-accent-text' : 'text-faint'}`} />
           {advice.better ? (
             <p className="min-w-0 flex-1 text-ink">
@@ -175,7 +175,7 @@ function RadioCard({ radio }: { radio: Radio }) {
           <Toggle checked={form.dca} onChange={(value) => set('dca', value)} label="Automatic channel" help="Dynamic channel assignment (DCA): the AP moves to a quieter channel on its own." />
           <Toggle checked={form.dtp} onChange={(value) => set('dtp', value)} label="Automatic power" help="Dynamic transmit power (DTP): the AP adjusts its power to the surroundings." />
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button disabled={!dirty || busy} onClick={() => setForm(initial)}>
             <RotateCcw size={13} /> Reset
           </Button>
@@ -193,6 +193,7 @@ function RadioCard({ radio }: { radio: Radio }) {
 
       <div className="border-t border-line pt-3">
         <KeyValue
+          className="grid-cols-[7.5rem_minmax(0,1fr)] sm:grid-cols-[7.5rem_minmax(0,1fr)]"
           items={[
             { label: 'Noise floor', value: radio.noiseFloor === null ? '—' : `${radio.noiseFloor} dBm` },
             { label: 'Max EIRP / TX', value: `${radio.maxEirp ?? '—'} / ${radio.maxTxPower ?? '—'} dBm` },

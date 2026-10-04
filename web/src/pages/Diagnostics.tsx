@@ -6,7 +6,7 @@ import { Page } from '@/app/Page'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
 import type { DiagnosticResult, WirelessStatus } from '@/types'
-import { Badge, Button, EmptyState, Field, Input, Panel, Select, Spinner, Segmented } from '@/ui/kit'
+import { Badge, Button, EmptyState, Field, Input, KeyValue, Panel, Select, Spinner, Segmented } from '@/ui/kit'
 
 export function DiagnosticsPage() {
   const [params, setParams] = useSearchParams()
@@ -15,6 +15,7 @@ export function DiagnosticsPage() {
   return (
     <Page
       title="Diagnostics"
+      width="settings"
       description="Test connections from the AP and inspect its VLAN paths and wireless interfaces."
       actions={
         <Segmented
@@ -39,7 +40,8 @@ export function DiagnosticsPage() {
   )
 }
 function ConnectivityPanel() {
-  const gateway = useApp((s) => s.state?.device.gateway)
+  const device = useApp((s) => s.state?.device)
+  const gateway = device?.gateway
   const [tool, setTool] = useState('ping')
   const [params] = useSearchParams()
   const [target, setTarget] = useState(params.get('target') || '')
@@ -60,9 +62,10 @@ function ConnectivityPanel() {
     }
   }
   return (
+    <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
     <Panel title="Network tests">
       <form
-        className="grid items-end gap-3 sm:grid-cols-[160px_1fr_auto]"
+        className="grid items-end gap-3 sm:grid-cols-[140px_minmax(0,1fr)_auto]"
         onSubmit={(e) => {
           e.preventDefault()
           if (!busy && (tool !== 'tcp' || (Number.isInteger(Number(port)) && Number(port) >= 1 && Number(port) <= 65535))) void run()
@@ -136,6 +139,14 @@ function ConnectivityPanel() {
         </div>
       )}
     </Panel>
+    <Panel title="Management network">
+      <KeyValue className="grid-cols-[5rem_minmax(0,1fr)] sm:grid-cols-[5rem_minmax(0,1fr)]" items={[
+        { label: 'AP address', value: device?.mgmtIp || '—', mono: true },
+        { label: 'Gateway', value: gateway || '—', mono: true },
+      ]} />
+      <p className="mt-3 border-t border-line pt-3 text-[12px] leading-5 text-muted">Tests use this management connection. Wireless clients use the gateway on their own VLAN.</p>
+    </Panel>
+    </div>
   )
 }
 function WirelessStatusPanel() {
@@ -185,7 +196,8 @@ function WirelessStatusPanel() {
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[850px] text-left text-[12px]">
+          <table className="w-full min-w-[950px] table-fixed text-left text-[12px]">
+            <colgroup><col className="w-44" /><col /><col className="w-28" /><col className="w-28" /><col className="w-20" /><col className="w-32" /><col className="w-28" /></colgroup>
             <thead className="border-b border-line text-2xs font-semibold uppercase tracking-wider text-faint">
               <tr>
                 {['Interface / BSSID', 'Network', 'State', 'Frequency', 'Clients', 'Beacon / DTIM', 'Wi-Fi'].map((h) => (

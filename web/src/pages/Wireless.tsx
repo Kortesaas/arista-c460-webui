@@ -87,6 +87,7 @@ export function WirelessPage() {
   return (
     <Page
       title="Wireless networks"
+      width="settings"
       description="Networks broadcast by this access point. Each one can use its own VLAN; addresses come from your router's DHCP, not the AP."
       actions={
         <Button variant="primary" onClick={() => setEditing('new')}>
@@ -151,7 +152,16 @@ export function WirelessPage() {
           ))}
         </ul>
         <div className="hidden overflow-x-auto rounded-lg border border-line bg-surface md:block">
-          <table className="w-full min-w-[760px] text-left text-[13px]">
+          <table className="w-full min-w-[1000px] table-fixed text-left text-[13px]">
+            <colgroup>
+              <col />
+              <col className="w-40" />
+              <col className="w-44" />
+              <col className="w-28" />
+              <col className="w-16" />
+              <col className="w-36" />
+              <col className="w-44" />
+            </colgroup>
             <thead className="border-b border-line text-2xs font-semibold uppercase tracking-wider text-faint">
               <tr>
                 <th className="px-3 py-2">Network</th>
@@ -172,7 +182,7 @@ export function WirelessPage() {
                   <td className="px-3 py-2.5">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <Dot tone={ssid.enabled ? 'ok' : 'neutral'} />
-                      <span className="font-medium text-ink">{ssid.name}</span>
+                      <span className="min-w-0 break-words font-medium text-ink">{ssid.name}</span>
                       {!ssid.enabled && <Badge>disabled</Badge>}
                       {ssid.hidden && <Badge>hidden</Badge>}
                       {ssid.isolation && <Badge tone="accent">isolated</Badge>}

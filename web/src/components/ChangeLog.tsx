@@ -65,7 +65,7 @@ export function ChangeLogPanel() {
       }
     >
       <div className="border-b border-line p-2">
-        <div className="relative">
+        <div className="relative max-w-2xl">
           <Search size={13} className="pointer-events-none absolute left-2 top-2 text-faint" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search changes, users or addresses" className="h-7 pl-7" aria-label="Search changes" />
         </div>
