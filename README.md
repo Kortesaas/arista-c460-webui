@@ -18,7 +18,7 @@
   <a href="#how-it-works">How it works</a>
 </p>
 
-![Overview](docs/images/overview.png)
+![Overview](docs/images/overview.jpg)
 
 The C-460 is normally managed from Arista's cloud. **arista-c460-webui** gives it a built-in web interface, like a standalone access point you buy in a shop: open `http://<ap-address>/` and manage it in the browser.
 
@@ -41,15 +41,15 @@ The C-460 is normally managed from Arista's cloud. **arista-c460-webui** gives i
 
 <table>
   <tr>
-    <td width="66%"><img src="docs/images/wireless.png" alt="Wireless networks"></td>
-    <td width="34%" rowspan="2"><img src="docs/images/mobile.png" alt="Overview on a phone"></td>
+    <td width="66%"><img src="docs/images/wireless.jpg" alt="Wireless networks"></td>
+    <td width="34%" rowspan="2"><img src="docs/images/mobile.jpg" alt="Overview on a phone"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/schedule.png" alt="Network schedule"></td>
+    <td><img src="docs/images/schedule.jpg" alt="Network schedule editor"></td>
   </tr>
 </table>
 
-![Radios in dark mode](docs/images/radios-dark.png)
+![Radios in dark mode](docs/images/radios-dark.jpg)
 
 ---
 
@@ -296,6 +296,10 @@ Permissions are separate: `monitor`, `configure`, `control`, and `secrets`.
 Each token includes monitoring. Tokens cannot manage browser accounts or mint
 other integration tokens. Prefer HTTPS with the AP certificate trusted by the
 client; the guide explains certificate setup.
+
+<p align="center">
+  <img src="docs/images/api-access.jpg" alt="API token permissions and expiry options" width="512">
+</p>
 
 ### Coverage limits
 
