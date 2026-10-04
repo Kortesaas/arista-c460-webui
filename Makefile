@@ -10,7 +10,7 @@ web:
 
 # Static ARM64 binary for the C-460 (no libc dependency).
 backend:
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o build/c460-webui .
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o build/c460-webui ./backend
 
 check:
 	$(GO) vet ./...

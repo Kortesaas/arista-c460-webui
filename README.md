@@ -281,7 +281,23 @@ make dev                                       # Vite on http://localhost:5175, 
 go test ./...                                  # backend tests (an SNMP interop test uses net-snmp if installed)
 ```
 
-Backend: `*.go` in the repository root (`gnmi.go` agent client, `state.go` state model, `api.go` HTTP API, `auth.go` sessions and roles, `mixed.go` WPA2/WPA3 mixed mode, `schedule.go`, `history.go`, `health.go`, `snmp.go`, `metrics.go`, `bootstrap.go`). Interface: `web/` (React, Tailwind). Installer and service script: `deploy/`.
+Backend: `backend/` (`gnmi.go` agent client, `state.go` state model, `api.go` HTTP API, `auth.go` sessions and roles, `mixed.go` WPA2/WPA3 mixed mode, `schedule.go`, `history.go`, `health.go`, `snmp.go`, `metrics.go`, `bootstrap.go`). Interface: `web/` (React, Tailwind). Installer and service script: `deploy/`.
+
+### Repository layout
+
+```text
+backend/   Go HTTP API, AP integrations, and backend tests
+web/       React interface and embedded frontend assets
+deploy/    AP installer, service script, and firmware trust checks
+docs/      Technical notes and feature coverage
+Makefile   Build, development, and verification commands
+go.mod     Shared Go module (with go.sum for dependency checksums)
+```
+
+Build the AP binary with `make build`; build only the backend with `make backend`
+after building the frontend. For a local backend build, use
+`go build -o build/c460-webui-local ./backend`. Run backend tests from the
+repository root with `go test ./...`.
 
 ## Known limitations
 

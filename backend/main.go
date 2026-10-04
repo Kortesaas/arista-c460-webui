@@ -7,7 +7,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"embed"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -22,10 +21,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
-)
 
-//go:embed all:web/dist
-var webFS embed.FS
+	webassets "arista-c460-webui/web"
+)
 
 var version = "dev"
 
@@ -212,7 +210,7 @@ func main() {
 	cliTrigger := make(chan struct{}, 1)
 	go cliInfo.Run(ctx, 5*time.Minute, cliTrigger)
 
-	dist, err := fs.Sub(webFS, "web/dist")
+	dist, err := fs.Sub(webassets.Files, "dist")
 	if err != nil {
 		log.Fatal(err)
 	}
