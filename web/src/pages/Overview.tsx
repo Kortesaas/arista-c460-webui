@@ -4,6 +4,7 @@ import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
 import { Age, BandChip, Dot, Meter, Stat, VlanChip } from '@/components/status'
 import { useApp } from '@/stores/app'
+import type { Ssid } from '@/types'
 import { cn } from '@/ui/cn'
 import { Badge, EmptyState, KeyValue, Panel } from '@/ui/kit'
 import { PortCards, portLabel } from '@/components/Ports'
@@ -24,7 +25,7 @@ export function OverviewPage() {
   const state = useApp((store) => store.state)
   const canEdit = useApp((store) => store.role === 'admin')
   if (!state) return <LoadingState />
-  const { device, radios, ssids, clients, interfaces } = state
+  const { device, hardware, radios, ssids, clients, interfaces } = state
 
   const activeSsids = ssids.filter((ssid) => ssid.enabled)
   const activeRadios = radios.filter((radio) => radio.enabled)
@@ -75,7 +76,7 @@ export function OverviewPage() {
       <div className="mt-3 xl:hidden">
         <HealthPanel items={state.health ?? []} />
       </div>
-      <div className="mt-3 grid gap-3 xl:grid-cols-[1.4fr_1fr]">
+      <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="flex min-w-0 flex-col gap-3">
           <Panel title="Radios" bodyClassName="p-0" actions={<PanelLink to="/radios">Configure</PanelLink>}>
             <div className="grid divide-y divide-line md:grid-cols-3 md:divide-x md:divide-y-0">
@@ -119,6 +120,7 @@ export function OverviewPage() {
             </div>
           </Panel>
 
+          <OverviewNetworks ssids={ssids} canEdit={canEdit} />
           <TrendsPanel />
         </section>
 
@@ -128,57 +130,63 @@ export function OverviewPage() {
           </div>
           <Panel title="Access point" actions={<PanelLink to="/system">Details</PanelLink>}>
             <KeyValue
+              className="grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[7rem_minmax(0,1fr)]"
               items={[
                 { label: 'Management IP', value: device.mgmtIp ? `${device.mgmtIp}/${device.mgmtPrefix}` : '—', mono: true },
                 { label: 'Gateway', value: device.gateway || '—', mono: true },
-                { label: 'Firmware', value: device.firmware || '—' },
-                { label: 'Uptime', value: formatDuration(device.uptimeSeconds) },
+                { label: 'Power source', value: hardware?.powerSource || '—' },
               ]}
             />
-            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3">
+            <div className="mt-3 grid grid-cols-3 gap-3 border-t border-line pt-3">
+              <Meter value={device.cpuUsage ?? null} label="CPU" warnAt={75} dangerAt={90} />
               <Meter value={memUsed} label="Memory" warnAt={75} dangerAt={90} />
               <Meter value={storageUsed} label="Flash" warnAt={75} dangerAt={90} />
             </div>
           </Panel>
           <Panel title="Ethernet" actions={<PanelLink to="/network">Network</PanelLink>}>
-            <PortCards interfaces={interfaces} compact />
+            <PortCards interfaces={interfaces} compact className="xl:grid-cols-1" />
           </Panel>
         </div>
       </div>
+    </Page>
+  )
+}
 
-      <Panel title={`Wireless networks (${ssids.length})`} className="mt-3" bodyClassName="p-0" actions={<PanelLink to="/wireless">Manage</PanelLink>}>
-        {ssids.length === 0 ? (
-          <EmptyState
-            icon={<Wifi size={24} />}
-            title="No wireless networks yet"
-            description="Add the first network to start broadcasting."
-            action={
-              canEdit ? (
-                <Link to="/wireless?edit=new" className="inline-flex h-8 items-center rounded border border-accent bg-accent px-3 text-[13px] font-medium text-white hover:bg-accent-hover">
-                  Add network
-                </Link>
-              ) : undefined
-            }
-          />
-        ) : (
-          <>
-            {/* Fixed columns on wider screens, so chips line up from row to row. */}
-            <div className="hidden gap-x-4 border-b border-line px-3 py-1.5 text-2xs font-semibold uppercase tracking-wider text-faint sm:grid sm:grid-cols-[0.5rem_minmax(0,1fr)_8rem_10rem_5rem] xl:grid-cols-[0.5rem_minmax(0,1fr)_9rem_11rem_10rem_5rem]">
-              <span />
-              <span>Network</span>
-              <span>VLAN</span>
-              <span className="hidden xl:block">Security</span>
-              <span>Bands</span>
-              <span className="text-right">Clients</span>
-            </div>
-            <ul className="divide-y divide-line">
-              {ssids.map((ssid) => (
-                <li key={ssid.name}>
-                  <Link
-                    to={canEdit ? `/wireless?edit=${encodeURIComponent(ssid.name)}` : '/wireless'}
-                    title={canEdit ? `Edit ${ssid.name}` : undefined}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 transition-colors hover:bg-surface-2 sm:grid sm:grid-cols-[0.5rem_minmax(0,1fr)_8rem_10rem_5rem] sm:gap-x-4 xl:grid-cols-[0.5rem_minmax(0,1fr)_9rem_11rem_10rem_5rem]"
-                  >
+function OverviewNetworks({ ssids, canEdit }: { ssids: Ssid[]; canEdit: boolean }) {
+  return (
+    <Panel title={`Wireless networks (${ssids.length})`} bodyClassName="p-0" actions={<PanelLink to="/wireless">Manage</PanelLink>}>
+      {ssids.length === 0 ? (
+        <EmptyState
+          icon={<Wifi size={24} />}
+          title="No wireless networks yet"
+          description="Add the first network to start broadcasting."
+          action={
+            canEdit ? (
+              <Link to="/wireless?edit=new" className="inline-flex h-8 items-center rounded border border-accent bg-accent px-3 text-[13px] font-medium text-white hover:bg-accent-hover">
+                Add network
+              </Link>
+            ) : undefined
+          }
+        />
+      ) : (
+        <>
+          {/* Fixed columns on wider screens, so chips line up from row to row. */}
+          <div className="hidden gap-x-4 border-b border-line px-3 py-1.5 text-2xs font-semibold uppercase tracking-wider text-faint sm:grid sm:grid-cols-[0.5rem_minmax(0,1fr)_8rem_10rem_5rem] 2xl:grid-cols-[0.5rem_minmax(0,1fr)_9rem_11rem_10rem_5rem]">
+            <span />
+            <span>Network</span>
+            <span>VLAN</span>
+            <span className="hidden 2xl:block">Security</span>
+            <span>Bands</span>
+            <span className="text-right">Clients</span>
+          </div>
+          <ul className="divide-y divide-line">
+            {ssids.map((ssid) => (
+              <li key={ssid.name}>
+                <Link
+                  to={canEdit ? `/wireless?edit=${encodeURIComponent(ssid.name)}` : '/wireless'}
+                  title={canEdit ? `Edit ${ssid.name}` : undefined}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 transition-colors hover:bg-surface-2 sm:grid sm:grid-cols-[0.5rem_minmax(0,1fr)_8rem_10rem_5rem] sm:gap-x-4 2xl:grid-cols-[0.5rem_minmax(0,1fr)_9rem_11rem_10rem_5rem]"
+                >
                   <Dot tone={ssid.enabled ? 'ok' : 'neutral'} />
                   <span className="min-w-0 flex-1 basis-[9rem] truncate text-[13px] font-medium text-ink">
                     {ssid.name}
@@ -187,7 +195,7 @@ export function OverviewPage() {
                   <span className="flex min-w-0 items-center justify-self-start">
                     <VlanChip vlan={ssid.vlan} className="max-w-full truncate" />
                   </span>
-                  <span className="hidden truncate text-[12px] text-muted xl:block" title={opModeShort(ssid.opmode)}>
+                  <span className="hidden truncate text-[12px] text-muted 2xl:block" title={opModeShort(ssid.opmode)}>
                     {opModeShort(ssid.opmode)}
                   </span>
                   <span className="flex items-center gap-1">
@@ -196,13 +204,12 @@ export function OverviewPage() {
                     ))}
                   </span>
                   <span className="tabular ml-auto text-right text-[12px] text-muted sm:ml-0">{plural(ssid.clients, 'client')}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </Panel>
-    </Page>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Panel>
   )
 }
