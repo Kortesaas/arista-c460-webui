@@ -226,7 +226,7 @@ func requestSchema(pattern string) map[string]any {
 	case "PUT /api/radios/{id}/wifi7":
 		set("width", map[string]any{"enum": []int{160, 320}})
 	case "POST /api/diagnostics":
-		set("tool", map[string]any{"enum": []string{"ping", "dns", "tcp"}})
+		set("tool", map[string]any{"enum": []string{"ping", "dns", "trace", "tcp"}})
 		set("port", map[string]any{"minimum": 1, "maximum": 65535})
 	case "POST /api/locate":
 		set("minutes", map[string]any{"minimum": 1, "maximum": 30})

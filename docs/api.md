@@ -106,7 +106,8 @@ GET /capabilities              Versions, permissions, supported settings,
                                ranges, widths, bands and links to the reference.
 GET /openapi.json               Machine-readable API paths and JSON schemas.
 GET /docs                      This guide, served locally as HTML.
-POST /diagnostics              {tool:"ping"|"dns"|"tcp",target,port?}.
+POST /diagnostics              {tool:"ping"|"dns"|"trace"|"tcp",target,port?}.
+                               trace runs bounded traceroute (8 hops).
                                TCP needs port 1–65535. Timeout is 15 seconds.
 
 Collection resources /device, /radios, /ssids, /clients, /neighbors,
@@ -126,6 +127,14 @@ or /device every 5 seconds for monitoring; a 1-second request does not make a
 and should be requested on demand. History starts empty after service restart.
 
 ## Configuration endpoints (configure)
+
+Coverage follows the controls currently implemented in the WebUI. Enterprise
+RADIUS/802.1X, MAC access lists/client blocking, configurable QoS/rate limits,
+IPv6 management, MLO, firmware updates and preferred uplink selection are not
+currently exposed. Some need additional implementation and verification;
+others encounter firmware restrictions. Webhooks/push subscriptions and
+persistent history are also not implemented. See README.md for coverage and
+docs/native-features.md for the device verification record.
 
 POST /ssids                    Create a network with the complete SSID body.
 PUT /ssids/{name}              Replace ordinary settings (body name permits

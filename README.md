@@ -274,15 +274,56 @@ That is why everything this project installs lives in `/opt/c460-webui/`, with o
 ## Local API for integrations
 
 Computers on the management network can monitor and configure the AP through
-`/api/v1` on its existing HTTP/HTTPS listener. In **System → API access**, create
+`/api/v1` on its existing HTTP/HTTPS listener. The API exposes the controls
+implemented in the WebUI, with 65 operations for local integrations; it does
+not claim to expose the complete Arista controller or firmware feature set.
+
+In **System → API access**, create
 a named, revocable token for each integration. Monitoring is included; extra
 permissions cover configuration, device actions, and secrets. Tokens are stored
-as hashes, survive restarts, and can expire automatically.
+as hashes, survive restarts, and can expire automatically. Send the token in an
+`Authorization: Bearer YOUR_TOKEN` header; configuration requests use JSON.
+
+| Area | API coverage |
+|---|---|
+| Monitoring | Device resources, CPU usage, clients, radio utilization, nearby networks, Ethernet counters, health, history, events and audit log |
+| Wireless configuration | SSIDs, security/passwords, band selection, VLAN mappings, isolation, schedules and supported advanced features |
+| Radio configuration | Channels, widths, transmit power, automatic channel/power settings, advanced features and native 6 GHz Wi-Fi 7 at 160/320 MHz |
+| Management and services | IPv4 address, gateway, DNS, management VLAN, NTP/time zone, LLDP, SNMP, Prometheus, labels and sampling cadence |
+| Diagnostics and actions | Ping, DNS, traceroute, TCP tests, native status, client reconnect, identify LEDs, SSH enable/disable, reboot and configuration backup/restore |
+
+Permissions are separate: `monitor`, `configure`, `control`, and `secrets`.
+Each token includes monitoring. Tokens cannot manage browser accounts or mint
+other integration tokens. Prefer HTTPS with the AP certificate trusted by the
+client; the guide explains certificate setup.
+
+### Coverage limits
+
+The API does not currently offer RADIUS/802.1X enterprise Wi-Fi, client blocking
+or MAC access lists, configurable QoS/bandwidth limits, IPv6 management settings,
+Wi-Fi 7 MLO, firmware updates, or preferred Ethernet uplink selection. It also
+does not provide webhooks/push subscriptions or persistent historical metrics;
+integrations poll snapshots and can store their own history.
+
+These gaps have different causes: some require additional implementation and
+device verification, while others encounter documented firmware restrictions.
+Root access alone does not establish that an unimplemented feature works.
+See [known limitations](#known-limitations) and the
+[native feature verification record](docs/native-features.md).
+
+The AP does not configure upstream switches/routers or supply wireless-client
+DHCP. Management changes are staged for an explicit reboot, and wireless changes
+can briefly interrupt clients. Monitoring reads reuse cached samples; check
+their timestamps rather than assuming each request collected new data.
+
+### Reference and examples
 
 See the [complete API guide](docs/api.md), [Python client](examples/c460_client.py),
-and the AP's `/api/v1/openapi.json` specification. The guide covers all endpoints,
+and the AP's `/api/v1/openapi.json` OpenAPI 3.0.3 specification. The guide covers all endpoints,
 request bodies, polling cadence, operational effects, authentication, and errors.
-The API guide and specification are also linked directly from System.
+The guide is served locally at `/api/v1/docs`; both links are available in System.
+The Python client uses only the standard library and works on Raspberry Pi OS
+and other computers with Python 3.
 
 ```bash
 # Set C460_URL, C460_TOKEN and C460_CA for your AP first (see the API guide).
