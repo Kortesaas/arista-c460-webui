@@ -269,10 +269,22 @@ export interface NativeClient {
   values: Record<string, string>
 }
 
+export type FeatureValue = boolean | number | null
+export type FeatureSettings = Record<string, FeatureValue>
+
 export interface SsidFeatures {
   rrm: boolean | null
   load: boolean | null
+  /** Every advanced setting; null means the firmware default. */
+  settings: FeatureSettings
+  /** What the firmware's own configuration currently runs. */
+  native: Record<string, boolean | number>
   interfaces: { interface: string; band: string; rrm: boolean | null; load: boolean | null; error?: string }[]
+}
+
+export interface RadioFeatures {
+  settings: FeatureSettings
+  native: Record<string, boolean | number>
 }
 export interface LldpTiming {
   interval: number

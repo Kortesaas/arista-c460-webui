@@ -29,6 +29,8 @@ import type {
   SsidSchedule,
   ScheduleStatus,
   StagedChange,
+  FeatureSettings,
+  RadioFeatures,
 } from '@/types'
 
 export class ApiError extends Error {
@@ -81,7 +83,9 @@ export const api = {
   updateSsid: (name: string, input: SsidInput) => call('PUT', `/api/ssids/${encodeURIComponent(name)}`, input),
   deleteSsid: (name: string) => call('DELETE', `/api/ssids/${encodeURIComponent(name)}`),
   ssidFeatures: (name: string) => call<SsidFeatures>('GET', `/api/ssids/${encodeURIComponent(name)}/features`),
-  updateSsidFeatures: (name: string, rrm: boolean | null, load: boolean | null) => call('PUT', `/api/ssids/${encodeURIComponent(name)}/features`, { rrm, load }),
+  updateSsidFeatures: (name: string, settings: FeatureSettings) => call('PUT', `/api/ssids/${encodeURIComponent(name)}/features`, settings),
+  radioFeatures: (id: number) => call<RadioFeatures>('GET', `/api/radios/${id}/features`),
+  updateRadioFeatures: (id: number, settings: FeatureSettings) => call('PUT', `/api/radios/${id}/features`, settings),
   lldp: () => call<LldpState>('GET', '/api/lldp'),
   updateLldp: (timing: LldpTiming) => call('PUT', '/api/lldp', timing),
   snmp: () => call<SnmpStatus>('GET', '/api/snmp'),

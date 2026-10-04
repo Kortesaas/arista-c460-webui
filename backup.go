@@ -33,14 +33,18 @@ type Backup struct {
 		Firmware string `json:"firmware"`
 		UI       string `json:"ui"`
 	} `json:"source"`
-	SSIDs      []ssidRequest      `json:"ssids"`
-	Radios     []BackupRadio      `json:"radios"`
-	WiFi7      *WiFi7Settings     `json:"wifi7,omitempty"`
-	Management *ManagementRequest `json:"management,omitempty"`
-	Labels     BackupLabels       `json:"labels"`
-	Time       *TimeInput         `json:"time,omitempty"`
-	LLDP       *LLDPTiming        `json:"lldp,omitempty"`
-	Secrets    *EncryptedSecrets  `json:"secrets,omitempty"`
+	SSIDs  []ssidRequest  `json:"ssids"`
+	Radios []BackupRadio  `json:"radios"`
+	WiFi7  *WiFi7Settings `json:"wifi7,omitempty"`
+	// Advanced settings that are not at the firmware default, per SSID name
+	// and per radio band (see features.go).
+	SSIDFeatures  map[string]map[string]any `json:"ssidFeatures,omitempty"`
+	RadioFeatures map[string]map[string]any `json:"radioFeatures,omitempty"`
+	Management    *ManagementRequest        `json:"management,omitempty"`
+	Labels        BackupLabels              `json:"labels"`
+	Time          *TimeInput                `json:"time,omitempty"`
+	LLDP          *LLDPTiming               `json:"lldp,omitempty"`
+	Secrets       *EncryptedSecrets         `json:"secrets,omitempty"`
 }
 
 type BackupRadio struct {
@@ -151,6 +155,14 @@ func (a *API) createBackup(w http.ResponseWriter, r *http.Request) {
 	secrets := map[string]string{}
 	for _, s := range st.SSIDs {
 		b.SSIDs = append(b.SSIDs, ssidRequest{Name: s.Name, Enabled: s.Enabled, Hidden: s.Hidden, OpMode: s.OpMode, Bands: s.Bands, VLAN: s.VLAN, Isolation: s.Isolation})
+		if entry, ok := a.poller.SSIDEntry(s.Name); ok {
+			if f := setFeatures(featureValues(entry, ssidFeatureDefs)); len(f) > 0 {
+				if b.SSIDFeatures == nil {
+					b.SSIDFeatures = map[string]map[string]any{}
+				}
+				b.SSIDFeatures[s.Name] = f
+			}
+		}
 		if cfg, ok := a.poller.SSIDConfig(s.Name); ok {
 			if psk := str(firstOf(cfg["wpa3-psk"], cfg["wpa2-psk"])); psk != "" {
 				secrets[s.Name] = psk
@@ -159,6 +171,14 @@ func (a *API) createBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, radio := range st.Radios {
 		b.Radios = append(b.Radios, BackupRadio{Band: radio.Band, radioRequest: radioRequest{Enabled: radio.Enabled, Channel: radio.Channel, Width: radio.Width, Power: radio.PowerRequested, DCA: radio.DCA, DTP: radio.DTP}})
+		if cfg, _, ok := a.poller.RadioConfig(radio.ID); ok {
+			if f := setFeatures(featureValues(map[string]any{"config": cfg}, radioFeatureDefs)); len(f) > 0 {
+				if b.RadioFeatures == nil {
+					b.RadioFeatures = map[string]map[string]any{}
+				}
+				b.RadioFeatures[radio.Band] = f
+			}
+		}
 	}
 	if a.wifi7 != nil {
 		b.WiFi7 = a.wifi7.Saved()
@@ -248,7 +268,11 @@ func (a *API) planRestore(req restoreRequest) (*restorePlan, error) {
 			if err != nil {
 				return nil, fmt.Errorf("SSID %q: %w", s.Name, err)
 			}
-			entries = append(entries, map[string]any{"name": s.Name, "config": cfg})
+			entry := map[string]any{"name": s.Name, "config": cfg}
+			if err := mergeFeatures(ssidFeatureDefs, entry, b.SSIDFeatures[s.Name], s.Name); err != nil {
+				return nil, fmt.Errorf("advanced settings of %q: %w", s.Name, err)
+			}
+			entries = append(entries, entry)
 			plan.ssids = append(plan.ssids, ssidChange{oldName: s.Name, newName: s.Name, mixed: s.OpMode == opModeMixed})
 			if exists {
 				for _, leaf := range leaves {
@@ -302,6 +326,9 @@ func (a *API) planRestore(req restoreRequest) (*restorePlan, error) {
 				return nil, fmt.Errorf("this AP has no %s GHz radio", br.Band)
 			}
 			entry, err := a.radioEntry(id, br.radioRequest)
+			if err == nil {
+				err = mergeFeatures(radioFeatureDefs, entry, b.RadioFeatures[br.Band], "")
+			}
 			if err != nil {
 				return nil, err
 			}

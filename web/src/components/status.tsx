@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import type { Band } from '@/types'
 import { cn } from '@/ui/cn'
@@ -22,17 +23,26 @@ export function Dot({ tone, pulse, className }: { tone: Tone; pulse?: boolean; c
 }
 
 /** Big number used in overview tiles. */
-export function Stat({ label, value, detail, tone = 'neutral', icon, className }: { label: string; value: ReactNode; detail?: ReactNode; tone?: Tone; icon?: ReactNode; className?: string }) {
+export function Stat({ label, value, detail, tone = 'neutral', icon, className, to }: { label: string; value: ReactNode; detail?: ReactNode; tone?: Tone; icon?: ReactNode; className?: string; to?: string }) {
   const valueColor: Record<Tone, string> = { neutral: 'text-ink', accent: 'text-accent-text', ok: 'text-ok', warn: 'text-warn', danger: 'text-danger' }
-  return (
-    <div className={cn('min-w-0 rounded-lg border border-line bg-surface p-3', className)}>
+  const body = (
+    <>
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-[12px] font-medium text-muted">{label}</span>
         {icon && <span className="text-faint">{icon}</span>}
       </div>
       <p className={cn('tabular mt-1.5 text-2xl font-semibold leading-none', valueColor[tone])}>{value}</p>
       {detail && <p className="mt-1.5 truncate text-[11px] text-faint">{detail}</p>}
-    </div>
+    </>
+  )
+  const box = cn('block min-w-0 rounded-lg border border-line bg-surface p-3', className)
+  // A tile with a destination is a link: hovering shows it leads somewhere.
+  return to ? (
+    <Link to={to} className={cn(box, 'transition-colors hover:border-accent hover:bg-accent-soft/40')}>
+      {body}
+    </Link>
+  ) : (
+    <div className={box}>{body}</div>
   )
 }
 

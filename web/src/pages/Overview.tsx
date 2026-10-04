@@ -22,6 +22,7 @@ function PanelLink({ to, children }: { to: string; children: string }) {
 
 export function OverviewPage() {
   const state = useApp((store) => store.state)
+  const canEdit = useApp((store) => store.role === 'admin')
   if (!state) return <LoadingState />
   const { device, radios, ssids, clients, interfaces } = state
 
@@ -48,10 +49,11 @@ export function OverviewPage() {
       dense
     >
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        <Stat label="Networks" value={`${activeSsids.length}/${ssids.length}`} detail="broadcasting" tone={activeSsids.length ? 'ok' : 'warn'} icon={<Wifi size={13} />} />
-        <Stat label="Clients" value={clients.length} detail={clients.length ? `${plural(new Set(clients.map((c) => c.ssid)).size, 'network')}` : 'none connected'} icon={<Users size={13} />} />
-        <Stat label="Radios" value={`${activeRadios.length}/${radios.length}`} detail={activeRadios.map((radio) => `${radio.band}`).join(' · ') + ' GHz'} tone={activeRadios.length === radios.length ? 'ok' : 'warn'} icon={<Antenna size={13} />} />
+        <Stat to="/wireless" label="Networks" value={`${activeSsids.length}/${ssids.length}`} detail="broadcasting" tone={activeSsids.length ? 'ok' : 'warn'} icon={<Wifi size={13} />} />
+        <Stat to="/clients" label="Clients" value={clients.length} detail={clients.length ? `${plural(new Set(clients.map((c) => c.ssid)).size, 'network')}` : 'none connected'} icon={<Users size={13} />} />
+        <Stat to="/radios" label="Radios" value={`${activeRadios.length}/${radios.length}`} detail={activeRadios.map((radio) => `${radio.band}`).join(' · ') + ' GHz'} tone={activeRadios.length === radios.length ? 'ok' : 'warn'} icon={<Antenna size={13} />} />
         <Stat
+          to="/network"
           label="Uplink"
           value={uplinks.length ? uplinks[0]!.speed || 'Up' : 'Down'}
           detail={interfaces.map((iface) => `${portLabel(iface)} ${iface.up ? 'up' : 'down'}`).join(' · ')}
@@ -59,6 +61,7 @@ export function OverviewPage() {
           icon={<Cable size={13} />}
         />
         <Stat
+          to="/system"
           label="Temperature"
           value={device.temperatureC === null ? '—' : `${Math.round(device.temperatureC)} °C`}
           detail="hottest sensor"
@@ -77,7 +80,7 @@ export function OverviewPage() {
           <Panel title="Radios" bodyClassName="p-0" actions={<PanelLink to="/radios">Configure</PanelLink>}>
             <div className="grid divide-y divide-line md:grid-cols-3 md:divide-x md:divide-y-0">
               {radios.map((radio) => (
-                <div key={radio.id} className="min-w-0 p-3">
+                <Link key={radio.id} to="/radios" className="block min-w-0 p-3 transition-colors hover:bg-surface-2">
                   <div className="flex items-center justify-between gap-2">
                     <BandChip band={radio.band} />
                     <Badge tone={radio.enabled ? 'ok' : 'neutral'}>
@@ -97,12 +100,21 @@ export function OverviewPage() {
                   <div className="mt-3">
                     <Meter value={radio.utilization} label="Channel utilisation" />
                   </div>
-                  <div className="tabular mt-2 flex justify-between gap-2 text-[11px] text-faint">
-                    <span>{plural(radio.clients, 'client')}</span>
-                    <span>noise {radio.noiseFloor ?? '—'} dBm</span>
-                    <span>{radio.neighbors} nearby</span>
-                  </div>
-                </div>
+                  <dl className="tabular mt-2.5 grid grid-cols-3 gap-2 text-[11px] leading-4">
+                    <div>
+                      <dt className="text-faint">Clients</dt>
+                      <dd className="text-ink">{radio.clients}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-faint">Noise</dt>
+                      <dd className="whitespace-nowrap text-ink">{radio.noiseFloor ?? '—'} dBm</dd>
+                    </div>
+                    <div>
+                      <dt className="text-faint" title="Other access points heard on this band">Nearby</dt>
+                      <dd className="text-ink">{radio.neighbors}</dd>
+                    </div>
+                  </dl>
+                </Link>
               ))}
             </div>
           </Panel>
@@ -136,7 +148,18 @@ export function OverviewPage() {
 
       <Panel title={`Wireless networks (${ssids.length})`} className="mt-3" bodyClassName="p-0" actions={<PanelLink to="/wireless">Manage</PanelLink>}>
         {ssids.length === 0 ? (
-          <EmptyState icon={<Wifi size={24} />} title="No wireless networks" description="Create one under Wireless networks." />
+          <EmptyState
+            icon={<Wifi size={24} />}
+            title="No wireless networks yet"
+            description="Add the first network to start broadcasting."
+            action={
+              canEdit ? (
+                <Link to="/wireless?edit=new" className="inline-flex h-8 items-center rounded border border-accent bg-accent px-3 text-[13px] font-medium text-white hover:bg-accent-hover">
+                  Add network
+                </Link>
+              ) : undefined
+            }
+          />
         ) : (
           <>
             {/* Fixed columns on wider screens, so chips line up from row to row. */}
@@ -150,7 +173,12 @@ export function OverviewPage() {
             </div>
             <ul className="divide-y divide-line">
               {ssids.map((ssid) => (
-                <li key={ssid.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 sm:grid sm:grid-cols-[0.5rem_minmax(0,1fr)_8rem_10rem_5rem] sm:gap-x-4 xl:grid-cols-[0.5rem_minmax(0,1fr)_9rem_11rem_10rem_5rem]">
+                <li key={ssid.name}>
+                  <Link
+                    to={canEdit ? `/wireless?edit=${encodeURIComponent(ssid.name)}` : '/wireless'}
+                    title={canEdit ? `Edit ${ssid.name}` : undefined}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 transition-colors hover:bg-surface-2 sm:grid sm:grid-cols-[0.5rem_minmax(0,1fr)_8rem_10rem_5rem] sm:gap-x-4 xl:grid-cols-[0.5rem_minmax(0,1fr)_9rem_11rem_10rem_5rem]"
+                  >
                   <Dot tone={ssid.enabled ? 'ok' : 'neutral'} />
                   <span className="min-w-0 flex-1 basis-[9rem] truncate text-[13px] font-medium text-ink">
                     {ssid.name}
@@ -168,6 +196,7 @@ export function OverviewPage() {
                     ))}
                   </span>
                   <span className="tabular ml-auto text-right text-[12px] text-muted sm:ml-0">{plural(ssid.clients, 'client')}</span>
+                  </Link>
                 </li>
               ))}
             </ul>

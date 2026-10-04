@@ -70,7 +70,16 @@ info=$(ap 'uname -m; sed -n "s/.*Model *: *\[\(.*\)\]/\1/p" /opt/banner 2>/dev/n
 echo "$info" | grep -qx aarch64 || { echo "Not an ARM64 AP or root SSH failed:" >&2; echo "$info" >&2; exit 1; }
 model=$(echo "$info" | sed -n 2p)
 case "$model" in C-460*) ;; *) echo "Warning: model is '${model:-unknown}', this tool targets the C-460." >&2 ;; esac
-echo "$info" | grep -qx agent-ok || { echo "OpenConfig agent certificate not found; enable OpenConfig mode first (see README)." >&2; exit 1; }
+echo "$info" | grep -qx agent-ok || { echo "OpenConfig agent certificate not found; enable OpenConfig mode first (see README, step 3)." >&2; exit 1; }
+
+# An AP that can still reach Arista's cloud gets its local mode switched off
+# and its configuration wiped as soon as it has internet access.
+discovery=$(ap "sed -n 's/^[[:space:]]*\(primary_server\|secondary_server\)[[:space:]]*=[[:space:]]*//p' /opt/sensor/discovery.conf 2>/dev/null" | tr -d ' \t' | sort -u)
+if [ "$discovery" != "127.0.0.1" ]; then
+	echo "Cloud discovery is still active on $HOST (servers: ${discovery:-unknown})." >&2
+	echo "On the AP's command line run: server discovery method ipdns pri 127.0.0.1 sec 127.0.0.1   (README, step 2)" >&2
+	[ "$CHECK_ONLY" = 1 ] || [ "${C460_ALLOW_CLOUD_DISCOVERY:-}" = 1 ] || exit 1
+fi
 
 # Runs deploy/overlay-check.sh on the AP; fails when the next boot would wipe the writable layer.
 trust_check() {

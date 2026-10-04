@@ -57,6 +57,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/history", a.read(a.historyHandler))
 	mux.Handle("GET /api/clients/{mac}/history", a.read(a.clientHistory))
 	mux.Handle("GET /api/ssids/{name}/features", a.read(a.getSSIDFeatures))
+	mux.Handle("GET /api/radios/{id}/features", a.read(a.radioFeatures))
 	mux.Handle("GET /api/lldp", a.read(a.getLLDP))
 	mux.Handle("GET /api/trust", a.read(a.trust))
 	mux.Handle("GET /api/snmp", a.read(a.snmpSettings))
@@ -78,6 +79,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.Handle("PUT /api/ssids/{name}/schedule", a.write(a.updateSchedule))
 	mux.Handle("GET /api/ssids/{name}/join", a.write(a.joinCode)) // reveals the password
 	mux.Handle("PUT /api/radios/{id}", a.write(a.updateRadio))
+	mux.Handle("PUT /api/radios/{id}/features", a.write(a.updateRadioFeatures))
 	mux.Handle("PUT /api/radios/{id}/wifi7", a.write(a.updateWiFi7))
 	mux.Handle("POST /api/batch", a.write(a.applyBatch))
 	mux.Handle("PUT /api/management", a.write(a.updateManagement))

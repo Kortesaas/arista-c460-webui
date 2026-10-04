@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { CalendarClock, Eye, EyeOff, Pencil, Plus, QrCode, Trash2, Wifi, SlidersHorizontal } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { WirelessFeaturesDialog } from '@/components/WirelessFeatures'
@@ -46,6 +47,16 @@ export function WirelessPage() {
   const state = useApp((store) => store.state)
   const staged = useStaging((s) => s.changes)
   const [editing, setEditing] = useState<Ssid | 'new' | null>(null)
+  // Links such as /wireless?edit=Office (from the Overview) open the editor.
+  const [params, setParams] = useSearchParams()
+  const editParam = params.get('edit')
+  const ssidList = useApp((store) => store.state?.ssids)
+  useEffect(() => {
+    if (!editParam || !ssidList) return
+    const target = editParam === 'new' ? 'new' : ssidList.find((s) => s.name === editParam)
+    if (target) setEditing(target)
+    setParams({}, { replace: true })
+  }, [editParam, ssidList, setParams])
   const [advanced, setAdvanced] = useState<Ssid | null>(null)
   const [deleting, setDeleting] = useState<Ssid | null>(null)
   const [joining, setJoining] = useState<string | null>(null)

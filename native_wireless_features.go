@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 type vendorRunner func(context.Context, string, ...string) (string, error)
@@ -53,6 +50,8 @@ type SSIDFeatureStatus struct {
 }
 type SSIDFeatures struct {
 	SSIDFeaturesInput
+	Settings   map[string]any      `json:"settings"` // every advanced setting; null = firmware default
+	Native     map[string]any      `json:"native"`   // what the firmware's own configuration currently has
 	Interfaces []SSIDFeatureStatus `json:"interfaces"`
 }
 
@@ -61,24 +60,6 @@ func configuredBool(cfg map[string]any, key string) *bool {
 		return &value
 	}
 	return nil
-}
-func featuresConfig(input SSIDFeaturesInput, cfg map[string]any) (map[string]any, []string) {
-	result := clone(cfg)
-	var deletes []string
-	for _, v := range []struct {
-		key   string
-		value *bool
-	}{{"dot11k", input.RRM}, {"qbss-load", input.Load}} {
-		if v.value == nil {
-			if _, exists := result[v.key]; exists {
-				delete(result, v.key)
-				deletes = append(deletes, v.key)
-			}
-		} else {
-			result[v.key] = *v.value
-		}
-	}
-	return result, deletes
 }
 func parseDriverBool(text, command string) (*bool, error) {
 	pattern := regexp.MustCompile(regexp.QuoteMeta(command) + `\s*:\s*([01])\s*$`)
@@ -126,6 +107,10 @@ func (a *API) getSSIDFeatures(w http.ResponseWriter, r *http.Request) {
 	}
 	defer a.diagnosticMu.Unlock()
 	result := SSIDFeatures{SSIDFeaturesInput: SSIDFeaturesInput{RRM: configuredBool(cfg, "dot11k"), Load: configuredBool(cfg, "qbss-load")}, Interfaces: []SSIDFeatureStatus{}}
+	if entry, ok := a.poller.SSIDEntry(name); ok {
+		result.Settings = featureValues(entry, ssidFeatureDefs)
+	}
+	result.Native = nativeFor(ssidFeatureDefs, a.nativeVAP(name))
 	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
 	defer cancel()
 	for _, iface := range hostapdInterfaces(a.wirelessDirectory()) {
@@ -155,36 +140,4 @@ func (a *API) getSSIDFeatures(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	reply(w, 200, result)
-}
-func (a *API) updateSSIDFeatures(w http.ResponseWriter, r *http.Request) {
-	var raw struct {
-		RRM  json.RawMessage `json:"rrm"`
-		Load json.RawMessage `json:"load"`
-	}
-	if !decode(w, r, &raw) {
-		return
-	}
-	if len(raw.RRM) == 0 || len(raw.Load) == 0 {
-		fail(w, 400, "Both settings are required; use null for the firmware default.")
-		return
-	}
-	var input SSIDFeaturesInput
-	if json.Unmarshal(raw.RRM, &input.RRM) != nil || json.Unmarshal(raw.Load, &input.Load) != nil {
-		fail(w, 400, "Settings must be true, false or null.")
-		return
-	}
-	a.writeMu.Lock()
-	defer a.writeMu.Unlock()
-	name := r.PathValue("name")
-	current, ok := a.poller.SSIDConfig(name)
-	if !ok {
-		fail(w, 404, "Network not found")
-		return
-	}
-	cfg, deletes := featuresConfig(input, current)
-	var paths []*gpb.Path
-	for _, leaf := range deletes {
-		paths = append(paths, a.ssidLeaf(name, leaf))
-	}
-	a.apply(w, r, "update measurement and load features for "+name, ssidBody(cfg), paths)
 }

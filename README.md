@@ -32,8 +32,8 @@ The C-460 is normally managed from Arista's cloud. **arista-c460-webui** gives i
 | | |
 |---|---|
 | **See what's going on** | Health checks that point at problems (clock, power, temperature, busy channels, radar, weak clients, missing backup uplink, default password). 24-hour graphs for clients, traffic, channel use and temperature. Connected clients with signal history and roaming between bands. RF scan of nearby networks. Wi-Fi events and a log of every configuration change. |
-| **Wireless networks** | Create and edit networks: WPA3, **WPA2/WPA3 mixed** for older devices, WPA2, Enhanced Open or open; 2.4/5/6 GHz; VLAN per network; client isolation; hidden networks. **QR codes** for joining by phone, with a printable card. **Schedules** that turn a network on and off at set times. |
-| **Radios** | Channel, width and power per band, automatic channel and power, and a **suggested quieter channel** based on the scan. Native **6 GHz Wi-Fi 7 at 160 or 320 MHz**, with verified operating state and restoration after restart/configuration changes. |
+| **Wireless networks** | Create and edit networks: WPA3, **WPA2/WPA3 mixed** for older devices, WPA2, Enhanced Open or open; 2.4/5/6 GHz; VLAN per network; client isolation; hidden networks. **Roaming between APs** (802.11r fast roaming, 802.11v, 802.11k, key caching), **band steering**, multicast and broadcast optimisation. **QR codes** for joining by phone, with a printable card. **Schedules** that turn a network on and off at set times. |
+| **Radios** | Channel, width and power per band, automatic channel and power, and a **suggested quieter channel** based on the scan. Native **6 GHz Wi-Fi 7 at 160 or 320 MHz**, with verified operating state and restoration after restart/configuration changes. Wi-Fi 6/7 tuning: **OFDMA, MU-MIMO, BSS colouring, spatial reuse** and the automatic power range. Every advanced setting shows what the firmware is actually running. |
 | **Change safely** | **Add to pending** collects several changes and applies them together, so Wi-Fi restarts once. A **read-only account** lets crew look without touching anything. **Backup and restore**, including copying the configuration to another AP. |
 | **Network and system** | Management IP (static or DHCP), gateway, DNS and management VLAN. Time servers (one click to use your router) and time zone. LLDP switch discovery. SSH on/off, locate LED, safe restart, administrator login. |
 | **Fit into your monitoring** | Read-only **SNMP** v1/v2c like your switches (system group, ifTable, ifXTable). Optional **Prometheus** `/metrics` with a token. |
@@ -82,6 +82,9 @@ ssh config@192.168.1.40
 ```
 
 You now see the vendor CLI. All commands in steps 2–4 are typed there.
+
+> [!TIP]
+> On your computer, `deploy/unlock-commands.sh` prints all commands for steps 2–4 with your SSH key already filled in, ready to paste.
 
 > [!TIP]
 > Give the AP a fixed address in your router (a DHCP reservation for its MAC). That keeps `http://<ap-address>/` the same after every restart. You can also set a static address later in the web interface.
@@ -160,7 +163,7 @@ Open `http://192.168.1.40/` (or `https://…`; your browser warns once about the
 
 ### More access points
 
-Repeat steps 1–5 for each AP. Then, on the new AP, open **System → Backup and restore → Choose file…** and pick the backup from your first AP. Its networks, radios and time settings are copied over; the Wi-Fi passwords come along if the backup was made with a passphrase. The new AP keeps its own name and IP address unless you choose otherwise.
+Repeat steps 1–5 for each AP. Then, on the new AP, open **System → Backup and restore → Choose file…** and pick the backup from your first AP. Its networks, radios, advanced roaming and radio settings and time settings are copied over; the Wi-Fi passwords come along if the backup was made with a passphrase. For roaming between APs, use the same network names and turn on **Fast roaming (802.11r)** under each network's advanced settings; the roaming domain is derived from the network name, so it matches automatically. The new AP keeps its own name and IP address unless you choose otherwise.
 
 ---
 
@@ -200,6 +203,7 @@ deploy/deploy.sh --help
 | Browser says **connection refused** | Your browser may have switched to `https://` silently, or you are on a network that cannot reach the management address. Try both `http://` and `https://`, and from a device on the management network. |
 | `deploy.sh`: **root SSH failed** | Repeat step 4 and check that `ssh root@<ap> whoami` works without a password. |
 | `deploy.sh`: **OpenConfig agent certificate not found** | Local configuration is off. Repeat step 3. |
+| `deploy.sh`: **Cloud discovery is still active** | Repeat step 2. The installer stops here on purpose: once the AP reaches the internet, the cloud would switch local mode off and wipe the setup. |
 | **Bootstrap: sign-in to the OpenConfig agent failed** | The AP already has an API user (for example from an earlier setup). Use that user instead: put `{"username": "…", "password": "…"}` into `secrets/ap.secret.json` and run `deploy/deploy.sh <ap> --gnmi-credentials secrets/ap.secret.json`. |
 | Settings are **gone after a reboot** | The firmware wiped its writable layer because it found an untrusted file. See [the boot-time trust check](#the-firmwares-boot-time-trust-check), redo steps 2–5, and always run `deploy/deploy.sh <ap> --check` before restarting after manual changes. |
 | A WPA2/WPA3 network shows **activating mixed** | Normal for up to a minute after any change; until then only WPA3 devices can join. If it shows **WPA2 inactive**, hover over the badge for the reason. |

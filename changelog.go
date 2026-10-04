@@ -151,6 +151,8 @@ func (a *API) describeChange(r *http.Request, f map[string]any) string {
 		return withDetails(prefix, a.ssidDifferences(r.PathValue("name"), f))
 	case "DELETE /api/ssids/{name}":
 		return "Deleted network " + name
+	case "PUT /api/radios/{id}/features":
+		return "Changed advanced radio settings (radio " + r.PathValue("id") + ")"
 	case "PUT /api/ssids/{name}/features":
 		return "Changed advanced settings of " + name
 	case "PUT /api/ssids/{name}/schedule":

@@ -264,6 +264,22 @@ func (p *Poller) SSIDConfig(name string) (map[string]any, bool) {
 	return nil, false
 }
 
+// SSIDEntry returns a copy of a whole SSID list entry (config and the
+// nested feature containers such as dot11r or band-steering).
+func (p *Poller) SSIDEntry(name string) (map[string]any, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for _, s := range items(p.raw, "ssids", "ssid") {
+		if str(dig(s, "name")) == name {
+			raw, _ := json.Marshal(s)
+			var out map[string]any
+			_ = json.Unmarshal(raw, &out)
+			return out, true
+		}
+	}
+	return nil, false
+}
+
 // RadioConfig returns a copy of the config container and the band identity of a radio.
 func (p *Poller) RadioConfig(id int) (map[string]any, string, bool) {
 	p.mu.RLock()

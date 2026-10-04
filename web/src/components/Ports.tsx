@@ -29,7 +29,7 @@ export function PortCards({ interfaces, compact }: { interfaces: Interface[]; co
           <div className="flex items-start gap-3">
             <Socket up={iface.up} />
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className="text-[13px] font-semibold text-ink">{portLabel(iface)}</span>
                 {iface.role === 'uplink' ? <Badge tone="accent">Uplink</Badge> : <Badge>Backup</Badge>}
                 <HelpTip label={portLabel(iface)}>

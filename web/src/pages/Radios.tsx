@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Lightbulb, RotateCcw, Save } from 'lucide-react'
+import { Lightbulb, RotateCcw, Save, SlidersHorizontal } from 'lucide-react'
 import { Page } from '@/app/Page'
 import { LoadingState } from '@/components/Loading'
 import { Wifi7Settings } from '@/components/Wifi7Settings'
+import { RadioFeaturesDialog } from '@/components/RadioFeatures'
 import { BandChip, Meter } from '@/components/status'
 import { ChannelChart } from '@/components/Charts'
 import { api } from '@/api'
@@ -10,7 +11,7 @@ import { useApp } from '@/stores/app'
 import { useStaging } from '@/stores/staging'
 import { recommendChannel } from '@/utils/channels'
 import type { Band, Radio, RadioInput } from '@/types'
-import { Badge, Button, Field, KeyValue, Panel, Segmented, Select, Spinner, Toggle } from '@/ui/kit'
+import { Badge, Button, Field, IconButton, KeyValue, Panel, Segmented, Select, Spinner, Toggle } from '@/ui/kit'
 import { isDfs, plural } from '@/utils/format'
 
 const WIDTHS: Record<Band, number[]> = { '2.4': [20, 40], '5': [20, 40, 80, 160], '6': [20, 40, 80, 160] }
@@ -42,6 +43,7 @@ function RadioCard({ radio }: { radio: Radio }) {
   const stage = useStaging((s) => s.stage)
   const pending = useStaging((s) => s.changes.some((c) => c.kind === 'radio' && c.id === radio.id))
   const [form, setForm] = useState<RadioInput>(() => inputOf(radio))
+  const [advanced, setAdvanced] = useState(false)
   const [busy, setBusy] = useState(false)
   const initial = inputOf(radio)
   const dirty = JSON.stringify(form) !== JSON.stringify(initial)
@@ -65,9 +67,12 @@ function RadioCard({ radio }: { radio: Radio }) {
         </span>
       }
       actions={
-        <span className="flex gap-1">
+        <span className="flex items-center gap-1">
           {pending && <Badge tone="accent">pending change</Badge>}
           <Badge tone={radio.enabled ? 'ok' : 'neutral'}>{radio.enabled ? 'On' : 'Off'}</Badge>
+          <IconButton label={`Advanced settings for the ${radio.band} GHz radio`} size="md" write onClick={() => setAdvanced(true)}>
+            <SlidersHorizontal size={14} />
+          </IconButton>
         </span>
       }
       bodyClassName="p-3 space-y-4"
@@ -183,6 +188,7 @@ function RadioCard({ radio }: { radio: Radio }) {
         </div>
       </div>
 
+      {advanced && <RadioFeaturesDialog radio={radio} onClose={() => setAdvanced(false)} />}
       <Wifi7Settings key={`${radio.wifi7?.saved?.enabled}-${radio.wifi7?.saved?.width}`} radio={radio} />
 
       <div className="border-t border-line pt-3">
