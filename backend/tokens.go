@@ -235,6 +235,12 @@ func tokenPermissions(pattern string) []string {
 		return []string{"control"}
 	case "POST /api/diagnostics":
 		return []string{"monitor"}
+	case "POST /api/support-bundle":
+		return []string{"monitor"}
+	case "POST /api/captures", "POST /api/captures/{id}/stop", "DELETE /api/captures/{id}":
+		return []string{"control", "secrets"}
+	case "GET /api/captures/{id}/download":
+		return []string{"secrets"}
 	}
 	if strings.HasPrefix(pattern, "GET ") {
 		return []string{"monitor"}

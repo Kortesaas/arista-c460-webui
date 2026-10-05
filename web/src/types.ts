@@ -33,6 +33,7 @@ export interface Radio {
   enabled: boolean
   channel: number
   width: number
+  operatingWidth?: number | null
   powerRequested: number
   eirp: number | null
   maxEirp: number | null
@@ -236,6 +237,19 @@ export interface SsidInput {
   isolation: boolean
 }
 
+export interface SsidPolicy {
+  macFilter: { mode: 'off' | 'allow' | 'deny'; addresses: string[] }
+  maxClients: number | null
+}
+
+export interface SsidPolicyStatus {
+  settings: SsidPolicy
+  managed: boolean
+  supported: boolean
+  interfaces: { interface: string; band: Band | ''; macMode: string | null; maxClients: number | null; addresses: string[] | null; error?: string }[]
+  error?: string
+}
+
 export interface RadioInput {
   enabled: boolean
   channel: number
@@ -335,6 +349,8 @@ export interface ConfigBackup {
   radios: { band: Band; enabled: boolean; channel: number; width: number; power: number; dca: boolean; dtp: boolean }[]
   management?: ManagementInput
   wifi7?: WiFi7Settings
+  ssidPolicies?: Record<string, SsidPolicy>
+  trafficPolicies?: Record<string, TrafficPolicy>
   labels: { siteName: string; vlanNames: Record<string, string> | null }
   time?: { primary: string; secondary: string }
   lldp?: { interval: number; hold: number }
@@ -434,3 +450,40 @@ export interface AccessToken {
   createdAt: string
   expiresAt: string | null
 }
+export interface CaptureInput {
+  interface: string
+  protocol: 'all' | 'arp' | 'icmp' | 'tcp' | 'udp'
+  host: string
+  port: number
+  seconds: number
+  maxBytes: number
+  snapLength: number
+}
+export interface CaptureJob {
+  id: string
+  input: CaptureInput
+  state: 'running' | 'completed' | 'stopped' | 'failed'
+  reason?: 'time-limit' | 'size-limit' | 'cancelled' | 'exited' | 'error'
+  startedAt: string
+  finishedAt?: string
+  expiresAt?: string
+  bytes: number
+  packets: number
+  download: boolean
+  error?: string
+}
+export interface CaptureStatus {
+  supported: boolean
+  interfaces: { name: string; kind: string; network?: string; up: boolean }[]
+  jobs: CaptureJob[]
+  maxSeconds: number
+  maxBytes: number
+  maxJobs: number
+  retentionSeconds: number
+}
+
+export interface TrafficLimits { uploadKbps: number | null; downloadKbps: number | null }
+export interface TrafficQoS { priority: 'voice' | 'video' | 'best-effort' | 'background'; mode: 'ceiling' | 'fixed'; mapping: 'dscp' | '8021p' | 'tos'; markDSCP: boolean; mark8021p: boolean }
+export interface TrafficPolicy { bandwidth: TrafficLimits; perClient: TrafficLimits; qos: TrafficQoS | null; clients: Record<string, TrafficLimits> }
+export interface TrafficQueue { interface: string; direction: 'upload' | 'download'; mac?: string; limitKbps: number | null; bytes: number; packets: number; drops: number; overlimits: number }
+export interface TrafficStatus { settings: TrafficPolicy; supported: boolean; managed: boolean; applied: boolean; pending: boolean; qosStatus: string; queues: TrafficQueue[]; error?: string }

@@ -33,6 +33,7 @@ type Radio struct {
 	Enabled         bool        `json:"enabled"`
 	Channel         int         `json:"channel"`
 	Width           int         `json:"width"`
+	OperatingWidth  *int        `json:"operatingWidth"`
 	PowerRequested  int         `json:"powerRequested"`
 	EIRP            *float64    `json:"eirp"`
 	MaxEIRP         *float64    `json:"maxEirp"`

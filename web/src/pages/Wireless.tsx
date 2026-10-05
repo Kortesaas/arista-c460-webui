@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import { Gauge, ShieldCheck } from 'lucide-react'
+import { TrafficDialog, TrafficLimitsHint } from '@/components/Traffic'
+import { ClientAccessDialog } from '@/components/ClientAccess'
 import { useSearchParams } from 'react-router-dom'
 import { CalendarClock, Eye, EyeOff, Pencil, Plus, QrCode, Trash2, Wifi, SlidersHorizontal } from 'lucide-react'
 import { Page } from '@/app/Page'
@@ -61,11 +64,15 @@ export function WirelessPage() {
   const [deleting, setDeleting] = useState<Ssid | null>(null)
   const [joining, setJoining] = useState<string | null>(null)
   const [scheduling, setScheduling] = useState<string | null>(null)
+  const [traffic, setTraffic] = useState<string | null>(null)
+  const [access, setAccess] = useState<string | null>(null)
   if (!state) return <LoadingState />
   const pendingFor = (name: string) => staged.find((c) => changeTarget(c) === `ssid:${name}`)
   const stagedNew = staged.filter((c): c is Extract<StagedChange, { kind: 'ssid-create' }> => c.kind === 'ssid-create')
   const actions = (ssid: Ssid) => (
-    <div className="flex justify-end gap-0.5">
+    <div className="flex flex-wrap justify-end gap-0.5">
+      <IconButton label={`Bandwidth and QoS for ${ssid.name}`} onClick={() => setTraffic(ssid.name)}><Gauge size={14} /></IconButton>
+      <IconButton label={`Client access for ${ssid.name}`} onClick={() => setAccess(ssid.name)}><ShieldCheck size={14} /></IconButton>
       <IconButton label={`Join code for ${ssid.name}`} write onClick={() => setJoining(ssid.name)}>
         <QrCode size={14} />
       </IconButton>
@@ -152,7 +159,7 @@ export function WirelessPage() {
           ))}
         </ul>
         <div className="hidden overflow-x-auto rounded-lg border border-line bg-surface md:block">
-          <table className="w-full min-w-[1000px] table-fixed text-left text-[13px]">
+          <table className="w-full min-w-[1120px] table-fixed text-left text-[13px]">
             <colgroup>
               <col />
               <col className="w-40" />
@@ -160,7 +167,7 @@ export function WirelessPage() {
               <col className="w-28" />
               <col className="w-16" />
               <col className="w-36" />
-              <col className="w-44" />
+              <col className="w-[272px]" />
             </colgroup>
             <thead className="border-b border-line text-2xs font-semibold uppercase tracking-wider text-faint">
               <tr>
@@ -170,7 +177,7 @@ export function WirelessPage() {
                 <th className="px-3 py-2">VLAN</th>
                 <th className="px-3 py-2 text-right">Clients</th>
                 <th className="px-3 py-2 text-right">Traffic</th>
-                <th className="w-28 px-3 py-2" />
+                <th className="px-3 py-2"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -218,7 +225,10 @@ export function WirelessPage() {
                   </td>
                   <td className="tabular px-3 py-2.5 text-right text-muted">{ssid.clients}</td>
                   <td className="tabular px-3 py-2.5 text-right text-[12px] text-faint">
-                    ↓ {formatBytes(ssid.rxBytes)} · ↑ {formatBytes(ssid.txBytes)}
+                    <div className="space-y-0.5 whitespace-nowrap">
+                      <div>↓ {formatBytes(ssid.rxBytes)}</div>
+                      <div>↑ {formatBytes(ssid.txBytes)}</div>
+                    </div>
                   </td>
                   <td className="px-3 py-2.5">
                     {actions(ssid)}
@@ -244,16 +254,23 @@ export function WirelessPage() {
         </>
       )}
 
+      <div className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-surface px-3 py-2.5">
+        <Gauge size={14} className="mt-0.5 shrink-0 text-muted" />
+        <TrafficLimitsHint />
+      </div>
+
       <p className="mt-3 text-[12px] text-faint">
         {plural(state.ssids.length, 'network')} ·{' '}
         {plural(
           state.ssids.reduce((sum, ssid) => sum + ssid.bssids.length, 0),
           'BSSID',
         )}{' '}
-        broadcasting. Saving a change restarts Wi-Fi on this AP for a few seconds; use “Add to pending” to collect several changes and restart once.
+        broadcasting. Saving network settings restarts Wi-Fi on this AP for a few seconds; use “Add to pending” to collect several changes and restart once.
       </p>
 
       {advanced && <WirelessFeaturesDialog name={advanced.name} onClose={() => setAdvanced(null)} />}
+      {traffic && <TrafficDialog name={traffic} onClose={() => setTraffic(null)} />}
+      {access && <ClientAccessDialog name={access} onClose={() => setAccess(null)} />}
       {joining && <JoinCodeDialog name={joining} onClose={() => setJoining(null)} />}
       {scheduling && <ScheduleDialog name={scheduling} onClose={() => setScheduling(null)} />}
       {editing && <SsidDialog ssid={editing === 'new' ? null : editing} existing={state.ssids.map((ssid) => ssid.name)} onClose={() => setEditing(null)} />}

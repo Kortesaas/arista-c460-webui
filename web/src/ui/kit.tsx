@@ -131,10 +131,10 @@ export function Field({ label, hint, help, children, className }: { label: strin
   )
 }
 
-export function Toggle({ checked, onChange, label, hint, help }: { checked: boolean; onChange: (value: boolean) => void; label: string; hint?: string; help?: ReactNode }) {
+export function Toggle({ checked, onChange, label, hint, help, disabled = false }: { checked: boolean; onChange: (value: boolean) => void; label: string; hint?: string; help?: ReactNode; disabled?: boolean }) {
   return (
     <div className="flex w-full items-center gap-3 rounded px-1 py-1 text-[13px] text-ink hover:bg-surface-2">
-      <span className="min-w-0 flex-1 cursor-pointer" onClick={() => onChange(!checked)}>
+      <span className="min-w-0 flex-1 cursor-pointer" onClick={() => !disabled && onChange(!checked)}>
         <span className="flex items-center gap-1.5">
           <span className="truncate">{label}</span>
           {help && (
@@ -150,6 +150,7 @@ export function Toggle({ checked, onChange, label, hint, help }: { checked: bool
         role="switch"
         aria-checked={checked}
         aria-label={label}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cn('relative h-[18px] w-8 shrink-0 rounded-full transition-colors', checked ? 'bg-accent' : 'bg-surface-3')}
       >

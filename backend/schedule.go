@@ -281,8 +281,15 @@ func (a *API) setSSIDEnabled(ctx context.Context, name string, on bool) {
 		log.Printf("schedule: %s: %v", name, err)
 	} else {
 		log.Printf("%s", action)
+		invalidateTrafficQoS()
 		a.poller.Refresh()
 		if err := a.ensureWiFi7(); err != nil {
+			entry.OK, entry.Error = false, err.Error()
+		}
+		if err := a.ensureSSIDPolicies(); err != nil {
+			entry.OK, entry.Error = false, err.Error()
+		}
+		if err := a.ensureTraffic(); err != nil {
 			entry.OK, entry.Error = false, err.Error()
 		}
 	}

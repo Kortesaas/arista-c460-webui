@@ -7,6 +7,11 @@ import type {
   WiFi7Settings,
   WiFi7State,
   SsidInput,
+  SsidPolicy,
+  SsidPolicyStatus,
+  TrafficPolicy,
+  TrafficLimits,
+  TrafficStatus,
   TrustCheck,
   TimeSettings,
   DiagnosticResult,
@@ -33,6 +38,9 @@ import type {
   StagedChange,
   FeatureSettings,
   RadioFeatures,
+  CaptureInput,
+  CaptureJob,
+  CaptureStatus,
 } from '@/types'
 
 export class ApiError extends Error {
@@ -58,7 +66,37 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return data as T
 }
 
+async function download(method: 'GET' | 'POST', path: string, name: string, body?: unknown) {
+  const response = await fetch(path, {
+    method, credentials: 'same-origin',
+    headers: { 'X-Requested-With': 'c460-webui', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!response.ok) {
+    const error = (await response.json().catch(() => ({}))) as { error?: string }
+    throw new ApiError(error.error ?? `${response.status} ${response.statusText}`, response.status)
+  }
+  const url = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 export const api = {
+  traffic: (name: string) => call<TrafficStatus>('GET', `/api/ssids/${encodeURIComponent(name)}/traffic`),
+  updateTraffic: (name: string, policy: TrafficPolicy) => call<TrafficStatus>('PUT', `/api/ssids/${encodeURIComponent(name)}/traffic`, policy),
+  updateClientTraffic: (name: string, mac: string, limits: TrafficLimits) => call<TrafficStatus>('PUT', `/api/ssids/${encodeURIComponent(name)}/traffic/clients/${encodeURIComponent(mac)}`, limits),
+  removeClientTraffic: (name: string, mac: string) => call<TrafficStatus>('DELETE', `/api/ssids/${encodeURIComponent(name)}/traffic/clients/${encodeURIComponent(mac)}`),
+  captures: () => call<CaptureStatus>('GET', '/api/captures'),
+  startCapture: (input: CaptureInput) => call<CaptureJob>('POST', '/api/captures', input),
+  stopCapture: (id: string) => call<CaptureJob>('POST', `/api/captures/${encodeURIComponent(id)}/stop`, {}),
+  deleteCapture: (id: string) => call('DELETE', `/api/captures/${encodeURIComponent(id)}`),
+  downloadCapture: (id: string) => download('GET', `/api/captures/${encodeURIComponent(id)}/download`, `capture-${id}.pcap`),
+  supportBundle: (includeClients: boolean, includeEvents: boolean) => download('POST', '/api/support-bundle', `c460-support-${new Date().toISOString().slice(0, 10)}.zip`, { includeClients, includeEvents }),
   tokens: () => call<{ tokens: AccessToken[] }>('GET', '/api/tokens'),
   createToken: (name: string, scopes: ApiScope[], expiresDays: number) => call<{ token: string; access: AccessToken }>('POST', '/api/tokens', { name, scopes, expiresDays }),
   revokeToken: (id: string) => call('DELETE', `/api/tokens/${encodeURIComponent(id)}`),
@@ -89,6 +127,8 @@ export const api = {
   deleteSsid: (name: string) => call('DELETE', `/api/ssids/${encodeURIComponent(name)}`),
   ssidFeatures: (name: string) => call<SsidFeatures>('GET', `/api/ssids/${encodeURIComponent(name)}/features`),
   updateSsidFeatures: (name: string, settings: FeatureSettings) => call('PUT', `/api/ssids/${encodeURIComponent(name)}/features`, settings),
+  ssidPolicy: (name: string) => call<SsidPolicyStatus>('GET', `/api/ssids/${encodeURIComponent(name)}/policy`),
+  updateSsidPolicy: (name: string, policy: SsidPolicy) => call<SsidPolicyStatus>('PUT', `/api/ssids/${encodeURIComponent(name)}/policy`, policy),
   radioFeatures: (id: number) => call<RadioFeatures>('GET', `/api/radios/${id}/features`),
   updateRadioFeatures: (id: number, settings: FeatureSettings) => call('PUT', `/api/radios/${id}/features`, settings),
   lldp: () => call<LldpState>('GET', '/api/lldp'),

@@ -133,6 +133,14 @@ func quoted(v any) string {
 func (a *API) describeChange(r *http.Request, f map[string]any) string {
 	name := quoted(r.PathValue("name"))
 	switch r.Pattern {
+	case "POST /api/captures":
+		return "Started packet capture on " + quoted(f["interface"])
+	case "POST /api/captures/{id}/stop":
+		return "Stopped packet capture " + r.PathValue("id")
+	case "DELETE /api/captures/{id}":
+		return "Deleted packet capture " + r.PathValue("id")
+	case "GET /api/captures/{id}/download":
+		return "Downloaded packet capture " + r.PathValue("id")
 	case "POST /api/tokens":
 		return "Created API token " + quoted(f["name"])
 	case "DELETE /api/tokens/{id}":
@@ -161,6 +169,14 @@ func (a *API) describeChange(r *http.Request, f map[string]any) string {
 		return "Changed advanced radio settings (radio " + r.PathValue("id") + ")"
 	case "PUT /api/ssids/{name}/features":
 		return "Changed advanced settings of " + name
+	case "PUT /api/ssids/{name}/policy":
+		return "Changed client access settings of " + name
+	case "PUT /api/ssids/{name}/traffic":
+		return "Changed bandwidth and QoS settings of " + name
+	case "PUT /api/ssids/{name}/traffic/clients/{mac}":
+		return "Changed device bandwidth limits for " + r.PathValue("mac") + " on " + name
+	case "DELETE /api/ssids/{name}/traffic/clients/{mac}":
+		return "Removed device bandwidth override for " + r.PathValue("mac") + " on " + name
 	case "PUT /api/ssids/{name}/schedule":
 		return "Changed the schedule of " + name
 	case "GET /api/ssids/{name}/join":

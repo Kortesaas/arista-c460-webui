@@ -20,8 +20,14 @@ Root access provides additional interfaces beyond this firmware's OpenConfig con
 | Ethernet link and counters | Kernel `/sys/class/net/eth0` / `eth1` | Overview and System → Ethernet ports | Native data corrected the OpenConfig converter mirroring the active port onto the unused one. The actual active port was up at 1 Gbit/s; the unused port had no carrier and zero byte counters. Logical names do not identify physical LAN1/LAN2. |
 | VLAN bridges, routes and neighbours | Kernel bridge membership, `/proc/net/vlan/config`, structured `ip` output | Diagnostics → Network paths | All five SSIDs mapped to the expected native/tagged bridges. The management route was present but its unplugged gateway had an unresolved neighbour entry. IPv4/IPv6 routes are read; redundant link-local IPv6 routes are omitted. |
 | Wireless event history | Bounded reads of native hostapd logs and rotated history | Diagnostics → Events, search, type filters and text export | Live connection/disconnection and channel-change history returned. Parser tests cover radar events, rotation/deduplication, the latest-150 limit, oversized files and exclusion of secrets/raw log tails. Actual radar detection was not induced. |
+| Persistent MAC allow/deny lists | Legacy MAC helper, driver `get_maccmd` / `getmac`, native profiles and TPM-encrypted AP configuration | Wireless networks → Client access; API `GET/PUT /ssids/{name}/policy` | Allow, deny, off, same-mode address replacement and 128 entries independently read back on 2.4, 5 and 6 GHz. Invalid requests leave the policy unchanged. Manager restart and an AP recovery reboot retained desired settings. Final policy saves use live setters rather than VAP restarts. |
+| Client limits per band | Driver `maxsta` / `get_maxsta`, native association-limit fields | Client access → Limit clients per band | Limits 4, 5, 6, 7 and 8 read back independently on all three bands; null restored 127. This is a limit per BSS, not a total across bands. Admission with 127 real clients was not load-tested. |
 
 ## Persistence and limits
+
+Client access settings have a separate, atomically saved desired file at `/opt/c460-webui/ssid-policies.json` (0600). The implementation modifies only five admission fields in the native AP configuration and the corresponding runtime profile fields. It prepares and decrypts a TPM-encrypted copy for byte comparison before publishing changes, preserves the native `ap.conf` symlink, and detects competing native writers. The vendor MAC helper and driver client-limit setter apply changes without rebuilding VAPs. Limits alone preserve an unchanged operating MAC list. Independent getters must match before desired settings are committed; failed writes, driver verification or desired-state persistence attempt rollback. Automated tests cover encryption mismatch, native-file races, file/driver rollback, restart persistence, renamed/deleted policies, disabled networks, multi-network restore and runtime drift repair.
+
+During the initial implementation, generic VAP MOD operations contributed to repeated 6 GHz beacon loss; the firmware reboot log recorded `consecutive vap restart due to vap down`. The AP recovered with the installation and saved networks intact. The final implementation avoids this route for policy-only writes; allow/deny/off, address replacement and limits were retested on all three bands without an AP restart. Ordinary network/radio changes still use the vendor configuration path. Disabled networks retain pending desired settings without starting wireless interfaces. Wireless backups include policies and off defaults; older backups without this field preserve policies on retained networks.
 
 NTP writes preserve all other native sensor fields, encrypt a prepared copy before modifying the live files, and roll back if saving or restarting NTP fails. A separately saved desired configuration under `/opt/c460-webui/` is restored at web-service startup. Concurrent native changes detected during encryption cause the save to be refused. No deliberate full AP reboot or physical power cycle was performed for these additions; the encrypted native boot configuration and service restart were verified. Clock synchronisation could not be tested without upstream NTP connectivity.
 
@@ -33,9 +39,72 @@ Authenticated endpoints are `GET/PUT /api/ssids/{name}/features` (nullable boole
 
 Diagnostics execute only fixed utilities with validated hostname/IP targets, authenticated sessions, a single active diagnostic, a 15-second deadline and capped output. They run from the management network; there is no arbitrary command endpoint or automatic switch/router modification. Hostapd commands use short-lived private Unix socket paths, deadlines and allowlisted response fields. Reconnect checks the station is currently associated before sending the command.
 
+## Bounded packet capture and support bundles
+
+The WebUI exposes these under **Diagnostics → Capture / Support**, and the API exposes `/api/captures` jobs/downloads and `/api/support-bundle` (also under `/api/v1`). Capture uses the installed `/sbin/tcpdump` with separate fixed argv, structured IP/protocol/port filters, packet-buffered classic PCAP output, and no promiscuous or monitor mode. A streaming framer validates PCAP headers/record lengths and writes complete records only, enforcing an exact 8 MiB maximum per file. Duration is at most 120 seconds. Only one capture runs, at most three jobs remain in private `/tmp` storage, and finished files expire after ten minutes. Cancellation/deadlines interrupt tcpdump, force-kill after a two-second grace period, and preserve only complete packets. Linux sends a parent-death signal if the manager crashes; startup removes previous capture files. No radio or VAP restart is requested.
+
+Starting/stopping/deleting captures requires administrator access and API `control` + `secrets` permissions; downloading PCAPs requires administrator access and `secrets`. Metadata is monitor-readable. Packet contents can contain credentials and are never included in support bundles. Captures observe only data visible to kernel interfaces: hardware offload can hide traffic, bridges can duplicate it, and raw 802.11/radiotap capture is not exposed.
+
+Support bundles use an independent typed allowlist of cached status and bounded fresh network/hostapd/parsed-event reads. Credentials, raw native configuration, raw log/crash contents, arbitrary gNMI maps, account usernames and packet files are excluded. Client details are optional and off by default. The ZIP includes a manifest with inclusion choices, timestamps and collection warnings. It has a 15-second collection deadline and a 2 MiB uncompressed/archive cap, and does not write a persistent copy on the AP. Viewers and monitor tokens may download this diagnostic data, which still contains AP/network identifiers.
+
+Automated local tests cover exact record-boundary caps with both endian and timestamp formats, malformed/partial PCAP input, short writes, validation/argv restrictions, cancellation/timeouts, concurrent admission, retention/expiry/shutdown cleanup, private permissions, failed-tool output suppression, authenticated binary downloads, token scopes, support redaction/client opt-in and OpenAPI contracts. Live tests on C-460 firmware 18.2.0-32 and tcpdump 4.99.1/libpcap 1.10.1 confirmed loopback UDP filtering, deadline and record-boundary size stops, cancellation, valid native PCAP reading, private file permissions, token restrictions, bundle selections and credential-field exclusion. Browser checks confirmed capture start, packet counters, stop and support-download success. The browser-created capture and its file were absent after expiry. A forced manager SIGKILL stopped its tcpdump child, the manager recovered, and startup cleared the capture files. The original six networks/16 enabled BSSs and native EHT320 remained intact; native configuration and encrypted copies were unchanged and the AP did not reboot. Actual wireless forwarding visibility, saturation throughput and precise wall-clock expiry timing remain unmeasured; expiry and retained-job bounds have automated coverage. No raw-radio/monitor capture or ordinary user-traffic capture was used for validation.
+
+## Bandwidth limits and QoS
+
+Wireless networks → Bandwidth and QoS and Clients → View → Bandwidth limits
+expose a shared SSID upload/download cap, a default cap for each connected
+device, and explicit Wi-Fi MAC overrides. The API provides GET/PUT traffic and
+PUT/DELETE client overrides, with monitor/configure token permissions and
+complete OpenAPI schemas. Rates use decimal Kbps (32–1,000,000); blank/null
+means unlimited. Overrides replace both default directions; aggregate caps
+still apply. Eight native IFB queue pairs are available on this device.
+
+The backend uses the installed tc_wrapper.sh path, IFB/TBF/HTB queues and
+vendor WMM set_qos setters. Desired settings live in traffic-policies.json
+(0600), with atomic persistence and runtime rollback. It does not edit native
+ap.conf or its encrypted copy for these controls and does not restart radios.
+The verifier checks kernel rates, complete Ethernet MAC matches, both IPv4
+and IPv6 redirection paths, and removal of old queues/redirection. iproute2
+emits duplicate JSON match keys for u32 filters: both must be preserved.
+SSID TBF queues expose a virtual class 1:1, which is explicitly distinguished
+from unexpected client classes. Inactive networks save pending settings;
+renames/deletions release old profile queues before their mapping disappears.
+
+A real phone on FOH-6G-TEST (6 GHz) measured 902.67 Mbps download and 318.49
+Mbps upload without caps. A 4,000 Kbps down / 1,000 Kbps up SSID cap measured
+3.69 / 0.42 Mbps; a MAC-only cap measured 3.76 / 0.70 Mbps. Browser uploads
+count only completed requests, so low-rate upload results omit transfers
+still in flight at the timer boundary. Native client queues recorded 1,284
+download drops / 12,968 overlimits and 220 upload drops / 3,684 overlimits
+after the test sequence. These are cumulative observations, not drop ratios
+or guaranteed throughput. IPv4 forwarding was measured; IPv6 filters were
+verified but IPv6 payload throughput was not measured.
+
+Fixed voice priority with upstream DSCP marking produced IPv4 TOS 0xb8
+(DSCP 46) in metadata-only captures of the phone's packets on eth0 under its
+cap. Voice/video/best-effort/background, ceiling/fixed, DSCP/802.1p/TOS
+mapping and upstream marking are configurable. The driver has no exact QoS
+operating getter; the API/UI explicitly distinguish accepted configuration
+from operating readback. Relative audio/control/video performance under
+competing wireless loads remains unmeasured. Rate caps do not simulate weak
+RF, injected delay, jitter or packet loss.
+
+Live API checks verified shared caps, defaults, device overrides, unlimited
+exemption, removal/inheritance, configure-token restrictions, invalid input,
+backup inclusion, kernel drift repair, and manager restart persistence with
+QoS reapplication. The phone stopped returning later measurements; those
+additional API-driven speed runs were skipped. Browser checks also saved a 2,000/500 Kbps device override, displayed verified
+kernel queues, then removed the override and confirmed no active queues. Temporary caps were removed.
+The original six networks, 16 enabled BSSs, EHT320 and native configuration
+hashes remained intact, with no AP reboot. Full power-cycle, multiple-client
+contention and simultaneous traffic across bands were not tested in this round.
+Automated tests cover normalization, caller-owned data isolation, MAC-filter
+readback, defaults/overrides, rollback, persistence, pending state, rename/delete,
+permissions, OpenAPI bounds and backup validation.
+
 ## More installed capabilities requiring separate integration
 
-The firmware contains additional radio, QoS, MAC policy, multicast, RADIUS, tunnel, BLE and telemetry machinery. Earlier native probes demonstrated selected WNM/DTIM/BSS-color controls, but runtime acceptance alone does not establish persistence or working client behavior. OpenConfig regeneration can overwrite native radio/profile edits, and some newer configuration-manager handlers are no-ops. These settings need per-feature desired-state merging, operating-state readback and appropriate client/peer tests before appearing as supported controls.
+The firmware contains additional radio, multicast, RADIUS, tunnel, BLE and telemetry machinery. Earlier native probes demonstrated selected WNM/DTIM/BSS-color controls, but runtime acceptance alone does not establish persistence or working client behavior. OpenConfig regeneration can overwrite native radio/profile edits, and some newer configuration-manager handlers are no-ops. These settings need per-feature desired-state merging, operating-state readback and appropriate client/peer tests before appearing as supported controls.
 
 The hidden dual-uplink machinery is present, but physical uplink changes can reboot the AP. IPv6 management is also represented in native network files. Neither is exposed as a new writable control in this release. Root access did not reveal a single supported switch that enables the complete vendor controller feature set.
 

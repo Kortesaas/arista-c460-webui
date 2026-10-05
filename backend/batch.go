@@ -121,12 +121,11 @@ func (a *API) applyBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rec := &recorder{ResponseWriter: w}
-	a.apply(rec, r, fmt.Sprintf("%d staged changes", len(req.Changes)), plan.body, plan.deletes)
+	a.applyChanges(rec, r, fmt.Sprintf("%d staged changes", len(req.Changes)), plan.body, plan.deletes, plan.ssids)
 	if rec.status >= 400 {
 		return
 	}
 	for _, change := range plan.ssids {
-		a.recordMixed(change)
 		if change.oldName != "" && change.oldName != change.newName {
 			a.renameSchedule(change.oldName, change.newName)
 		}

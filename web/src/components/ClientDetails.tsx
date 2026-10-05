@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { Gauge, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
 import type { Client, NativeClient } from '@/types'
 import { Badge, Button, Dialog, DialogActions, KeyValue, SectionLabel, Spinner } from '@/ui/kit'
+import { TrafficDialog } from '@/components/Traffic'
 import { ClientSignal } from '@/components/ClientSignal'
 import { formatBytes, formatDuration } from '@/utils/format'
 
@@ -13,6 +14,7 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
   const [native, setNative] = useState<NativeClient | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [traffic, setTraffic] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const toast = useApp((s) => s.toast)
   const refresh = useApp((s) => s.refresh)
@@ -46,6 +48,7 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
     }
   }
   const v = native?.values ?? {}
+  if (traffic) return <TrafficDialog name={client.ssid} clientMAC={client.mac} onClose={() => setTraffic(false)} />
   return (
     <Dialog
       title={client.hostname || client.ipv4 || 'Client details'}
@@ -102,6 +105,7 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
         </div>
       )}
       <DialogActions>
+        {!confirm && <Button disabled={busy} onClick={() => setTraffic(true)}><Gauge size={13} /> Bandwidth limits</Button>}
         {!confirm && client.ipv4 && (
           <Button
             disabled={busy}

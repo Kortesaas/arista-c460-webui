@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Resource reads use the same cached samples as the UI, never another driver poll.
@@ -107,6 +108,10 @@ func (a *API) capabilities(w http.ResponseWriter, r *http.Request) {
 		"ssidFeatures": ssidFeatureDefs, "radioFeatures": radioFeatureDefs,
 		"securityModes": opModes, "bands": []string{"2.4", "5", "6"}, "radioWidths": widths,
 		"wifi7Widths": []int{160, 320}, "maxTokens": 32,
-		"limits": map[string]any{"requestBytes": 65536, "diagnosticTimeoutSeconds": 15, "tokenExpiryDays": 3650},
+		"ssidPolicy":    map[string]any{"macModes": []string{"off", "allow", "deny"}, "maxMacAddresses": maxPolicyMACs, "minClientsPerBand": 1, "maxClientsPerBand": 127, "backend": "native-legacy", "firmware": "18.2.0-32", "supported": a.policies != nil && a.policies.available()},
+		"limits":        map[string]any{"requestBytes": 65536, "diagnosticTimeoutSeconds": 15, "tokenExpiryDays": 3650},
+		"packetCapture": map[string]any{"supported": a.captures.supported(), "maxSeconds": captureMaxSeconds, "maxBytes": captureMaxBytes, "maxJobs": captureMaxJobs, "retentionSeconds": int(captureRetention / time.Second), "minSnapLength": 64, "maxSnapLength": 4096, "promiscuous": false, "monitorMode": false},
+		"supportBundle": map[string]any{"maxBytes": supportMaxBytes, "format": "zip", "credentialsIncluded": false},
+		"traffic":       map[string]any{"supported": a.traffic != nil && a.traffic.supported(), "minKbps": minTrafficKbps, "maxKbps": maxTrafficKbps, "maxClientOverrides": maxTrafficOverrides, "units": "decimal kilobits/second", "scope": "SSID aggregate across bands and MAC client overrides", "ipv4": true, "ipv6": true, "qosPriorities": []string{"voice", "video", "best-effort", "background"}, "qosModes": []string{"fixed", "ceiling"}, "qosOperatingReadback": false},
 	})
 }

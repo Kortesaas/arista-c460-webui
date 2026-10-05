@@ -123,6 +123,9 @@ func renderMetrics(s stateResponse) string {
 	p.metric("c460_info", "Access point identity.", "gauge", 1, "hostname", d.Hostname, "name", d.SiteName, "model", d.Model, "firmware", d.Firmware, "ui_version", d.UIVersion)
 	p.metric("c460_up", "1 when the configuration agent answers.", "gauge", boolValue(s.Error == ""))
 	p.metric("c460_uptime_seconds", "Time since the AP started.", "gauge", d.UptimeSeconds)
+	if d.CPUUsage != nil {
+		p.metric("c460_cpu_usage_ratio", "CPU busy time, 0 to 1.", "gauge", *d.CPUUsage/100)
+	}
 	if d.TemperatureC != nil {
 		p.metric("c460_temperature_celsius", "Hottest temperature sensor.", "gauge", *d.TemperatureC)
 	}
@@ -134,7 +137,11 @@ func renderMetrics(s stateResponse) string {
 		band := r.Band
 		p.metric("c460_radio_enabled", "Radio switched on.", "gauge", boolValue(r.Enabled), "band", band)
 		p.metric("c460_radio_channel", "Primary channel.", "gauge", float64(r.Channel), "band", band)
-		p.metric("c460_radio_channel_width_mhz", "Channel width.", "gauge", float64(r.Width), "band", band)
+		width := r.Width
+		if r.OperatingWidth != nil {
+			width = *r.OperatingWidth
+		}
+		p.metric("c460_radio_channel_width_mhz", "Operating channel width.", "gauge", float64(width), "band", band)
 		if r.EIRP != nil {
 			p.metric("c460_radio_eirp_dbm", "Effective transmit power.", "gauge", *r.EIRP, "band", band)
 		}

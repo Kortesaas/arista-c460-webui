@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -38,13 +39,15 @@ type Backup struct {
 	WiFi7  *WiFi7Settings `json:"wifi7,omitempty"`
 	// Advanced settings that are not at the firmware default, per SSID name
 	// and per radio band (see features.go).
-	SSIDFeatures  map[string]map[string]any `json:"ssidFeatures,omitempty"`
-	RadioFeatures map[string]map[string]any `json:"radioFeatures,omitempty"`
-	Management    *ManagementRequest        `json:"management,omitempty"`
-	Labels        BackupLabels              `json:"labels"`
-	Time          *TimeInput                `json:"time,omitempty"`
-	LLDP          *LLDPTiming               `json:"lldp,omitempty"`
-	Secrets       *EncryptedSecrets         `json:"secrets,omitempty"`
+	SSIDFeatures    map[string]map[string]any `json:"ssidFeatures,omitempty"`
+	RadioFeatures   map[string]map[string]any `json:"radioFeatures,omitempty"`
+	SSIDPolicies    map[string]SSIDPolicy     `json:"ssidPolicies,omitempty"`
+	TrafficPolicies map[string]TrafficPolicy  `json:"trafficPolicies,omitempty"`
+	Management      *ManagementRequest        `json:"management,omitempty"`
+	Labels          BackupLabels              `json:"labels"`
+	Time            *TimeInput                `json:"time,omitempty"`
+	LLDP            *LLDPTiming               `json:"lldp,omitempty"`
+	Secrets         *EncryptedSecrets         `json:"secrets,omitempty"`
 }
 
 type BackupRadio struct {
@@ -145,12 +148,66 @@ func (a *API) createBackup(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "the passphrase must have at least 8 characters")
 		return
 	}
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
 	st := a.snapshot()
 	if st.GeneratedAt.IsZero() {
 		fail(w, http.StatusServiceUnavailable, "The AP configuration has not been read yet. Try again in a few seconds.")
 		return
 	}
 	b := Backup{Format: backupFormat, Version: 1, CreatedAt: time.Now().UTC()}
+	if a.traffic != nil && (a.traffic.supported() || len(a.traffic.Saved()) > 0) {
+		if a.traffic.loadErr != nil {
+			fail(w, 503, "Saved traffic settings are unreadable")
+			return
+		}
+		b.TrafficPolicies = a.traffic.Saved()
+		for _, s := range st.SSIDs {
+			if _, ok := b.TrafficPolicies[s.Name]; !ok {
+				b.TrafficPolicies[s.Name] = defaultTrafficPolicy()
+			}
+		}
+	}
+	if a.policies != nil && (a.policies.available() || len(a.policies.Saved()) > 0) {
+		if a.policies.loadErr != nil {
+			fail(w, 503, "Saved client access settings are unreadable")
+			return
+		}
+		b.SSIDPolicies = a.policies.Saved()
+		// Include defaults too: restoring a backup must be able to turn a
+		// policy off if it was enabled after the backup was taken.
+		if raw, err := os.ReadFile(a.policies.apConf); err == nil {
+			sections, err := policySections(raw)
+			if err != nil {
+				fail(w, 503, err.Error())
+				return
+			}
+			for _, section := range sections {
+				if _, managed := b.SSIDPolicies[section.name]; managed {
+					continue
+				}
+				policy, err := policyFromFields(section.fields)
+				if err != nil {
+					fail(w, 503, "Cannot back up client access settings of "+section.name+": "+err.Error())
+					return
+				}
+				b.SSIDPolicies[section.name] = policy
+			}
+		} else {
+			fail(w, 503, "Cannot read native client access settings for backup")
+			return
+		}
+		for _, ssid := range st.SSIDs {
+			if _, present := b.SSIDPolicies[ssid.Name]; !present {
+				b.SSIDPolicies[ssid.Name] = defaultSSIDPolicy()
+			}
+		}
+		for name := range b.SSIDPolicies {
+			if _, exists := a.poller.SSIDConfig(name); !exists {
+				delete(b.SSIDPolicies, name)
+			}
+		}
+	}
 	b.Source.Model, b.Source.Hostname, b.Source.Firmware, b.Source.UI = st.Device.Model, st.Device.Hostname, st.Device.Firmware, version
 	secrets := map[string]string{}
 	for _, s := range st.SSIDs {
@@ -251,6 +308,40 @@ func (a *API) planRestore(req restoreRequest) (*restorePlan, error) {
 		}
 	}
 	if req.Sections.Wireless {
+		if len(b.TrafficPolicies) > 0 && (a.traffic == nil || !a.traffic.supported() || a.traffic.loadErr != nil) {
+			return nil, errors.New("Traffic settings in this backup require a supported, healthy native backend")
+		}
+		for name, p := range b.TrafficPolicies {
+			if _, err := normalizeTrafficPolicy(p); err != nil {
+				return nil, fmt.Errorf("traffic settings of %q: %w", name, err)
+			}
+			found := false
+			for _, s := range b.SSIDs {
+				if s.Name == name {
+					found = true
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("traffic settings refer to missing network %q", name)
+			}
+		}
+		if len(b.SSIDPolicies) > 0 && (a.policies == nil || !a.policies.available() || a.policies.loadErr != nil) {
+			return nil, errors.New("Client access settings in this backup require a supported, healthy native policy backend")
+		}
+		for name, policy := range b.SSIDPolicies {
+			if _, err := normalizeSSIDPolicy(policy); err != nil {
+				return nil, fmt.Errorf("client access settings of %q: %w", name, err)
+			}
+			found := false
+			for _, ssid := range b.SSIDs {
+				if ssid.Name == name {
+					found = true
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("client access policy %q has no network in the backup", name)
+			}
+		}
 		var entries []any
 		names := map[string]bool{}
 		for _, s := range b.SSIDs {
@@ -405,7 +496,17 @@ func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	var applied []string
 	// Wi-Fi and radios in one transaction, so the AP restarts Wi-Fi once.
 	if len(plan.body) > 0 || len(plan.deletes) > 0 {
+		if a.traffic != nil {
+			if err := a.traffic.BeforeChanges(ctx, plan.ssids, a.poller.Snapshot()); err != nil {
+				restore := a.ensureTraffic()
+				fail(w, 502, fmt.Sprintf("Could not prepare traffic settings: %v; restore: %v", err, restore))
+				return
+			}
+		}
 		if err := a.gnmi.SetAP(ctx, plan.body, plan.deletes); err != nil {
+			if restore := a.ensureTraffic(); restore != nil {
+				err = fmt.Errorf("%w; traffic restore failed: %v", err, restore)
+			}
 			fail(w, http.StatusBadGateway, "The access point rejected the wireless settings: "+err.Error())
 			return
 		}
@@ -413,6 +514,7 @@ func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		for _, change := range plan.ssids {
 			a.recordMixed(change)
 		}
+		invalidateTrafficQoS()
 		a.poller.Refresh()
 	}
 	b := req.Backup
@@ -433,6 +535,34 @@ func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		stop()
 	} else if err := a.ensureWiFi7(); err != nil {
 		problems = append(problems, "Wi-Fi 7: "+err.Error())
+	}
+	if req.Sections.Wireless && a.policies != nil {
+		if err := a.policies.Rename(plan.ssids); err != nil {
+			problems = append(problems, "client access metadata: "+err.Error())
+		}
+		if err := a.policies.UpdateMany(ctx, b.SSIDPolicies); err != nil {
+			problems = append(problems, "client access: "+err.Error())
+		} else if len(b.SSIDPolicies) > 0 {
+			applied = append(applied, "client access policies")
+		}
+		if err := a.ensureSSIDPolicies(); err != nil {
+			problems = append(problems, "client access: "+err.Error())
+		}
+	}
+	if (req.Sections.Wireless || req.Sections.Radios) && a.traffic != nil {
+		if err := a.traffic.Rename(plan.ssids); err != nil {
+			problems = append(problems, "traffic metadata: "+err.Error())
+		}
+		if req.Sections.Wireless {
+			if err := a.traffic.UpdateMany(ctx, b.TrafficPolicies, a.poller.Snapshot()); err != nil {
+				problems = append(problems, "traffic settings: "+err.Error())
+			} else if len(b.TrafficPolicies) > 0 {
+				applied = append(applied, "traffic settings")
+			}
+		}
+		if err := a.ensureTraffic(); err != nil {
+			problems = append(problems, "traffic settings: "+err.Error())
+		}
 	}
 	if req.Sections.Labels {
 		if err := a.cfg.SetLabels(strings.TrimSpace(b.Labels.SiteName), b.Labels.VLANNames); err != nil {

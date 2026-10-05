@@ -27,6 +27,12 @@ func requiredFields(pattern string) []string {
 		return []string{"enabled"}
 	case "PUT /api/ssids/{name}/schedule":
 		return []string{"enabled", "windows"}
+	case "PUT /api/ssids/{name}/policy":
+		return []string{"macFilter", "maxClients"}
+	case "PUT /api/ssids/{name}/traffic":
+		return []string{"bandwidth", "perClient", "qos", "clients"}
+	case "PUT /api/ssids/{name}/traffic/clients/{mac}":
+		return []string{"uploadKbps", "downloadKbps"}
 	case "PUT /api/management":
 		return []string{"mode"}
 	}
@@ -36,8 +42,31 @@ func requiredFields(pattern string) []string {
 func validateCompleteSettings(pattern string, fields map[string]any) error {
 	for _, key := range requiredFields(pattern) {
 		value, present := fields[key]
-		if !present || value == nil && key != "vlan" {
+		if !present || value == nil && key != "vlan" && key != "maxClients" && key != "uploadKbps" && key != "downloadKbps" && key != "qos" {
 			return fmt.Errorf("Missing field %s; send the complete settings object", key)
+		}
+	}
+	if pattern == "PUT /api/ssids/{name}/traffic" {
+		for _, key := range []string{"bandwidth", "perClient"} {
+			v, _ := fields[key].(map[string]any)
+			if e := validateCompleteSettings("PUT /api/ssids/{name}/traffic/clients/{mac}", v); e != nil {
+				return fmt.Errorf("%s: %w", key, e)
+			}
+		}
+		clients, _ := fields["clients"].(map[string]any)
+		for mac, item := range clients {
+			v, _ := item.(map[string]any)
+			if e := validateCompleteSettings("PUT /api/ssids/{name}/traffic/clients/{mac}", v); e != nil {
+				return fmt.Errorf("%s: %w", mac, e)
+			}
+		}
+		if fields["qos"] != nil {
+			q, _ := fields["qos"].(map[string]any)
+			for _, k := range []string{"priority", "mode", "mapping", "markDSCP", "mark8021p"} {
+				if v, ok := q[k]; !ok || v == nil {
+					return fmt.Errorf("Missing QoS field %s", k)
+				}
+			}
 		}
 	}
 	if pattern == "POST /api/batch" {
@@ -156,6 +185,12 @@ func requestSchema(pattern string) map[string]any {
 		v = SNMPSettings{}
 	case "PUT /api/ssids/{name}/schedule":
 		v = SSIDSchedule{}
+	case "PUT /api/ssids/{name}/policy":
+		v = SSIDPolicy{}
+	case "PUT /api/ssids/{name}/traffic":
+		v = TrafficPolicy{}
+	case "PUT /api/ssids/{name}/traffic/clients/{mac}":
+		v = TrafficLimits{}
 	case "POST /api/restore":
 		v = restoreRequest{}
 	case "POST /api/batch":
@@ -164,6 +199,10 @@ func requestSchema(pattern string) map[string]any {
 		}{}
 	case "POST /api/diagnostics":
 		v = DiagnosticInput{}
+	case "POST /api/captures":
+		v = CaptureInput{}
+	case "POST /api/support-bundle":
+		v = SupportInput{}
 	case "PUT /api/settings":
 		v = struct {
 			SiteName  string            `json:"siteName"`
@@ -215,6 +254,50 @@ func requestSchema(pattern string) map[string]any {
 		}
 	}
 	switch pattern {
+	case "PUT /api/ssids/{name}/traffic", "PUT /api/ssids/{name}/traffic/clients/{mac}":
+		limits := func(v map[string]any) {
+			v["required"] = []string{"uploadKbps", "downloadKbps"}
+			v["additionalProperties"] = false
+			for _, key := range []string{"uploadKbps", "downloadKbps"} {
+				p := v["properties"].(map[string]any)[key].(map[string]any)
+				p["minimum"] = minTrafficKbps
+				p["maximum"] = maxTrafficKbps
+				p["description"] = "Decimal Kbps from the wireless client's perspective; null is unlimited."
+			}
+		}
+		if pattern == "PUT /api/ssids/{name}/traffic/clients/{mac}" {
+			limits(s)
+		} else {
+			limits(props["bandwidth"].(map[string]any))
+			limits(props["perClient"].(map[string]any))
+			clients := props["clients"].(map[string]any)
+			clients["maxProperties"] = maxTrafficOverrides
+			limits(clients["additionalProperties"].(map[string]any))
+			q := props["qos"].(map[string]any)
+			q["required"] = []string{"priority", "mode", "mapping", "markDSCP", "mark8021p"}
+			q["additionalProperties"] = false
+			qp := q["properties"].(map[string]any)
+			qp["priority"].(map[string]any)["enum"] = []string{"voice", "video", "best-effort", "background"}
+			qp["mode"].(map[string]any)["enum"] = []string{"ceiling", "fixed"}
+			qp["mapping"].(map[string]any)["enum"] = []string{"dscp", "8021p", "tos"}
+		}
+	case "POST /api/captures":
+		s["required"] = []string{"interface"}
+		set("protocol", map[string]any{"enum": []string{"all", "arp", "icmp", "tcp", "udp"}, "default": "all"})
+		set("seconds", map[string]any{"minimum": 1, "maximum": captureMaxSeconds, "default": 10})
+		set("maxBytes", map[string]any{"minimum": 65536, "maximum": captureMaxBytes, "default": 1 << 20})
+		set("snapLength", map[string]any{"minimum": 64, "maximum": 4096, "default": 128})
+		set("port", map[string]any{"minimum": 0, "maximum": 65535, "description": "0 disables the port filter; ARP and ICMP do not accept ports."})
+		set("host", map[string]any{"description": "Optional numeric IPv4 or IPv6 address; no hostname or raw BPF expressions."})
+	case "PUT /api/ssids/{name}/policy":
+		set("maxClients", map[string]any{"minimum": 1, "maximum": 127})
+		filter := props["macFilter"].(map[string]any)
+		filter["required"] = []string{"mode", "addresses"}
+		filter["additionalProperties"] = false
+		fp := filter["properties"].(map[string]any)
+		fp["mode"].(map[string]any)["enum"] = []string{"off", "allow", "deny"}
+		fp["addresses"].(map[string]any)["maxItems"] = maxPolicyMACs
+		fp["addresses"].(map[string]any)["nullable"] = false
 	case "POST /api/tokens":
 		set("name", map[string]any{"minLength": 1, "maxLength": 64})
 		set("expiresDays", map[string]any{"minimum": 0, "maximum": 3650})
@@ -280,12 +363,20 @@ func responseSchema(pattern string) map[string]any {
 		v = Client{}
 	case "POST /api/diagnostics":
 		v = DiagnosticResult{}
+	case "GET /api/captures":
+		v = CaptureStatus{}
+	case "POST /api/captures", "GET /api/captures/{id}", "POST /api/captures/{id}/stop":
+		v = CaptureJob{}
 	case "POST /api/backup":
 		v = Backup{}
 	case "GET /api/time":
 		v = TimeSettings{}
 	case "GET /api/lldp":
 		v = LLDPState{}
+	case "GET /api/ssids/{name}/policy", "PUT /api/ssids/{name}/policy":
+		v = SSIDPolicyStatus{}
+	case "GET /api/ssids/{name}/traffic", "PUT /api/ssids/{name}/traffic", "PUT /api/ssids/{name}/traffic/clients/{mac}", "DELETE /api/ssids/{name}/traffic/clients/{mac}":
+		v = TrafficStatus{}
 	case "GET /api/snmp":
 		v = snmpStatus{}
 	case "GET /api/metrics":
@@ -295,7 +386,7 @@ func responseSchema(pattern string) map[string]any {
 	}
 	if v != nil {
 		s := jsonSchema(reflect.TypeOf(v))
-		if len(strings.Split(pattern, "/")) == 3 && pattern != "GET /api/state" && pattern != "GET /api/time" && pattern != "GET /api/lldp" && pattern != "GET /api/snmp" && pattern != "GET /api/metrics" && pattern != "POST /api/backup" && pattern != "POST /api/diagnostics" {
+		if len(strings.Split(pattern, "/")) == 3 && pattern != "GET /api/state" && pattern != "GET /api/time" && pattern != "GET /api/lldp" && pattern != "GET /api/snmp" && pattern != "GET /api/metrics" && pattern != "POST /api/backup" && pattern != "POST /api/diagnostics" && pattern != "GET /api/captures" && pattern != "POST /api/captures" {
 			return map[string]any{"type": "object", "properties": map[string]any{"generatedAt": map[string]any{"type": "string", "format": "date-time"}, "pollSeconds": map[string]any{"type": "integer"}, "error": map[string]any{"type": "string"}, "data": s}}
 		}
 		return s
@@ -328,6 +419,9 @@ func (a *API) specification() map[string]any {
 		if e.Pattern == "POST /api/tokens" {
 			code = "201"
 		}
+		if e.Pattern == "POST /api/captures" {
+			code = "202"
+		}
 		responses[code] = map[string]any{"description": "Success", "content": map[string]any{"application/json": map[string]any{"schema": responseSchema(e.Pattern)}}}
 		for status, text := range map[string]string{"400": "Invalid request", "401": "Authentication required", "403": "Permission denied", "404": "Resource not found", "415": "JSON required", "429": "Too many attempts", "500": "Operation failed", "503": "AP not ready"} {
 			responses[status] = map[string]any{"description": text, "content": map[string]any{"application/json": map[string]any{"schema": errorSchema}}}
@@ -341,6 +435,13 @@ func (a *API) specification() map[string]any {
 		}
 		if e.Pattern == "GET /api/docs" {
 			responses[code] = map[string]any{"description": "API guide", "content": map[string]any{"text/html": map[string]any{"schema": map[string]any{"type": "string"}}}}
+		}
+		if e.Pattern == "GET /api/captures/{id}/download" || e.Pattern == "POST /api/support-bundle" {
+			media := "application/zip"
+			if e.Pattern == "GET /api/captures/{id}/download" {
+				media = "application/vnd.tcpdump.pcap"
+			}
+			responses[code] = map[string]any{"description": "Authenticated file download", "content": map[string]any{media: map[string]any{"schema": map[string]any{"type": "string", "format": "binary"}}}}
 		}
 		methods, ok := paths[v1path].(map[string]any)
 		if !ok {

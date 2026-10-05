@@ -34,6 +34,8 @@ type API struct {
 	history         *History
 	overrides       *WirelessOverrides
 	wifi7           *NativeWiFi7
+	policies        *SSIDPolicies
+	traffic         *TrafficPolicies
 	scheduler       Scheduler
 	defaultPassword defaultPasswordCheck
 	cliTrigger      chan struct{}
@@ -44,6 +46,8 @@ type API struct {
 	eventMu         sync.Mutex
 	eventCache      *WirelessEventLog
 	diagnosticMu    sync.Mutex // bounded native diagnostics, independent of configuration writes
+	captures        *PacketCaptures
+	supportMu       sync.Mutex
 }
 
 func (a *API) Register(mux *http.ServeMux) {
@@ -70,6 +74,8 @@ func (a *API) Register(mux *http.ServeMux) {
 	register("GET /api/history", a.read(a.historyHandler))
 	register("GET /api/clients/{mac}/history", a.read(a.clientHistory))
 	register("GET /api/ssids/{name}/features", a.read(a.getSSIDFeatures))
+	register("GET /api/ssids/{name}/policy", a.read(a.getSSIDPolicy))
+	register("GET /api/ssids/{name}/traffic", a.read(a.getTraffic))
 	register("GET /api/radios/{id}/features", a.read(a.radioFeatures))
 	register("GET /api/lldp", a.read(a.getLLDP))
 	register("GET /api/trust", a.read(a.trust))
@@ -79,6 +85,9 @@ func (a *API) Register(mux *http.ServeMux) {
 	register("GET /api/wireless-status", a.read(a.wirelessStatus))
 	register("GET /api/clients/{mac}/details", a.read(a.clientDetails))
 	register("POST /api/diagnostics", a.read(a.diagnose)) // tests only observe
+	register("GET /api/captures", a.read(a.listCaptures))
+	register("GET /api/captures/{id}", a.read(a.getCapture))
+	register("POST /api/support-bundle", a.read(a.supportBundle))
 
 	// Changes, administrator only; each one is written to the change log.
 	register("POST /api/password", a.write(a.changePassword))
@@ -89,6 +98,10 @@ func (a *API) Register(mux *http.ServeMux) {
 	register("PUT /api/ssids/{name}", a.write(a.updateSSID))
 	register("DELETE /api/ssids/{name}", a.write(a.deleteSSID))
 	register("PUT /api/ssids/{name}/features", a.write(a.updateSSIDFeatures))
+	register("PUT /api/ssids/{name}/policy", a.write(a.updateSSIDPolicy))
+	register("PUT /api/ssids/{name}/traffic", a.write(a.updateTraffic))
+	register("PUT /api/ssids/{name}/traffic/clients/{mac}", a.write(a.updateClientTraffic))
+	register("DELETE /api/ssids/{name}/traffic/clients/{mac}", a.write(a.updateClientTraffic))
 	register("PUT /api/ssids/{name}/schedule", a.write(a.updateSchedule))
 	register("GET /api/ssids/{name}/join", a.write(a.joinCode)) // reveals the password
 	register("PUT /api/radios/{id}", a.write(a.updateRadio))
@@ -109,6 +122,10 @@ func (a *API) Register(mux *http.ServeMux) {
 	register("POST /api/backup", a.write(a.createBackup))
 	register("POST /api/restore", a.write(a.restoreBackup))
 	register("POST /api/clients/{mac}/reconnect", a.write(a.reconnectClient))
+	register("POST /api/captures", a.write(a.startCapture))
+	register("POST /api/captures/{id}/stop", a.write(a.stopCapture))
+	register("DELETE /api/captures/{id}", a.write(a.deleteCapture))
+	register("GET /api/captures/{id}/download", a.write(a.downloadCapture))
 	register("GET /api/tokens", a.write(a.listTokens))
 	register("POST /api/tokens", a.write(a.createToken))
 	register("DELETE /api/tokens/{id}", a.write(a.revokeToken))
@@ -461,8 +478,22 @@ func (a *API) ssidLeaf(name, leaf string) *gpb.Path {
 }
 
 func (a *API) apply(w http.ResponseWriter, r *http.Request, what string, body map[string]any, deletes []*gpb.Path) {
+	a.applyChanges(w, r, what, body, deletes, nil)
+}
+
+func (a *API) applyChanges(w http.ResponseWriter, r *http.Request, what string, body map[string]any, deletes []*gpb.Path, changes []ssidChange) {
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(4 * time.Minute))
+	if a.traffic != nil {
+		if err := a.traffic.BeforeChanges(r.Context(), changes, a.poller.Snapshot()); err != nil {
+			restore := a.ensureTraffic()
+			fail(w, 502, fmt.Sprintf("Could not prepare traffic settings: %v; restore: %v", err, restore))
+			return
+		}
+	}
 	if err := a.gnmi.SetAP(r.Context(), body, deletes); err != nil {
+		if restore := a.ensureTraffic(); restore != nil {
+			err = fmt.Errorf("%w; traffic restore failed: %v", err, restore)
+		}
 		msg := err.Error()
 		if s, ok := status.FromError(err); ok {
 			msg = s.Message()
@@ -472,9 +503,33 @@ func (a *API) apply(w http.ResponseWriter, r *http.Request, what string, body ma
 		return
 	}
 	log.Printf("%s applied by %s", what, clientIP(r))
+	if a.policies != nil {
+		if err := a.policies.Rename(changes); err != nil {
+			fail(w, http.StatusBadGateway, "Wireless settings were saved, but client access metadata could not be saved: "+err.Error())
+			return
+		}
+	}
+	for _, change := range changes {
+		a.recordMixed(change)
+	}
+	if a.traffic != nil {
+		if err := a.traffic.Rename(changes); err != nil {
+			fail(w, 502, "Wireless settings were saved, but traffic metadata could not be saved: "+err.Error())
+			return
+		}
+	}
+	invalidateTrafficQoS()
 	a.poller.Refresh()
 	if err := a.ensureWiFi7(); err != nil {
 		fail(w, http.StatusBadGateway, "The change was saved, but restoring Wi-Fi 7 failed: "+err.Error())
+		return
+	}
+	if err := a.ensureSSIDPolicies(); err != nil {
+		fail(w, http.StatusBadGateway, "Wireless settings were saved, but restoring client access settings failed: "+err.Error())
+		return
+	}
+	if err := a.ensureTraffic(); err != nil {
+		fail(w, 502, "Wireless settings were saved, but traffic settings could not be restored: "+err.Error())
 		return
 	}
 	reply(w, http.StatusOK, map[string]bool{"ok": true})
@@ -559,11 +614,7 @@ func (a *API) applySSID(w http.ResponseWriter, r *http.Request, what string, cha
 	if change.entry != nil {
 		body["ssids"] = map[string]any{"ssid": []any{change.entry}}
 	}
-	rec := &recorder{ResponseWriter: w}
-	a.apply(rec, r, what, body, change.deletes)
-	if rec.status < 400 {
-		a.recordMixed(change)
-	}
+	a.applyChanges(w, r, what, body, change.deletes, []ssidChange{change})
 }
 
 func (a *API) recordMixed(change ssidChange) {

@@ -25,13 +25,16 @@ Writes additionally use:
 
 Token permissions are additive:
   monitor   Read status, configuration without secrets, history, events,
-            capabilities; run bounded ping, DNS and TCP diagnostics.
+            capabilities; run bounded ping, DNS and TCP diagnostics; download
+            support bundles and view packet-capture job metadata.
   configure Create/edit/delete wireless networks, VLAN assignments, radio
             settings, Wi-Fi 7, advanced features, schedules, management IP,
-            gateway/DNS, time, LLDP, labels, polling, SNMP and metrics.
+            gateway/DNS, time, LLDP, labels, polling, SNMP, metrics, bandwidth and QoS.
   control   Reboot the AP, enable/disable SSH, locate LEDs, reconnect clients.
+            Start, stop and delete packet captures also require secrets.
   secrets   Retrieve Wi-Fi join credentials, SNMP communities, metrics tokens,
             and create backups (passwords are encrypted with your passphrase).
+            Download PCAP files, which can contain private packet payloads.
 
 Every token includes monitor. Restore requires configure + control + secrets.
 Tokens cannot change browser accounts or create/revoke other access tokens.
@@ -79,6 +82,9 @@ GET /radios/{id}                One radio (use IDs returned by /radios).
 GET /ssids                     Configured networks, bands, VLAN, client count
                                and traffic. Passwords are never in these reads.
 GET /ssids/{name}               One network.
+GET /ssids/{name}/policy        Saved client access policy and independent
+                               driver mode, MAC list and limit for each band.
+GET /ssids/{name}/traffic       Desired limits/QoS and verified kernel queues.
 GET /clients                   Associated clients; optional ssid and band
                                query filters. Rates, RSSI, SNR, IP, byte counters.
 GET /clients/{mac}              One associated client; 404 after disconnection.
@@ -109,6 +115,11 @@ GET /docs                      This guide, served locally as HTML.
 POST /diagnostics              {tool:"ping"|"dns"|"trace"|"tcp",target,port?}.
                                trace runs bounded traceroute (8 hops).
                                TCP needs port 1–65535. Timeout is 15 seconds.
+GET /captures                  Capture availability, current interfaces, jobs
+                               and bounds. Metadata only; monitor permission.
+GET /captures/{id}             One job; 404 if missing/expired.
+POST /support-bundle           {includeClients:false,includeEvents:true}.
+                               Returns a ZIP download; monitor permission.
 
 Collection resources /device, /radios, /ssids, /clients, /neighbors,
 /interfaces, /health, /management and /settings return:
@@ -126,10 +137,142 @@ or /device every 5 seconds for monitoring; a 1-second request does not make a
 5-second sample fresher. Driver diagnostics and trust checks are more expensive
 and should be requested on demand. History starts empty after service restart.
 
+## Bandwidth limits and QoS
+
+On tested C-460 firmware 18.2.0-32, use Wireless networks → Bandwidth and QoS
+or Clients → View → Bandwidth limits. API reads require monitor; writes
+require configure. URL-encode SSID names and MAC addresses.
+
+GET /ssids/{name}/traffic
+PUT /ssids/{name}/traffic
+PUT /ssids/{name}/traffic/clients/{mac}
+DELETE /ssids/{name}/traffic/clients/{mac}
+
+Complete network PUT example (4 Mbps shared download, 1 Mbps shared upload):
+
+```json
+{
+  "bandwidth": {"uploadKbps": 1000, "downloadKbps": 4000},
+  "perClient": {"uploadKbps": null, "downloadKbps": null},
+  "qos": null,
+  "clients": {}
+}
+```
+
+Rates use decimal Kbps from the wireless client's perspective. Each direction
+accepts null for unlimited, or an integer from 32 to 1,000,000. The SSID cap is
+shared across its bands and devices. perClient gives each associated device a
+separate cap; new associations receive it on reconciliation (normally within
+five seconds after AP telemetry sees the client). The clients map accepts up
+to 128 unicast MAC overrides, including devices currently offline. An override
+replaces both default directions; null/null explicitly exempts that device
+from the per-client default. The shared SSID cap still applies. DELETE removes
+an override and resumes inheritance. Device PUT requires both uploadKbps and
+downloadKbps; network PUT requires all four top-level fields and both rates in
+every limits object. Unknown fields and incomplete requests are rejected on
+both API routes, including the legacy /api alias.
+
+Optional qos is null to restore native firmware settings, or a complete object:
+
+```json
+{"priority":"voice","mode":"fixed","mapping":"dscp","markDSCP":true,"mark8021p":false}
+```
+
+priority: voice, video, best-effort or background. mode: ceiling (retain lower
+packet priorities) or fixed (assign the network priority). mapping selects
+downstream dscp, 8021p or legacy tos. markDSCP and mark8021p enable upstream
+marking. Dedicated audio/control networks can use fixed voice; mixed traffic
+can use a voice ceiling and DSCP from the sending devices. These are WMM
+traffic classes, not automatic application recognition or reserved airtime.
+The driver has no exact operating QoS getter: qosStatus explicitly reports
+configured-no-driver-readback, pending or error. Configuration acceptance does
+not establish relative performance under competing audio/video loads.
+
+The response contains settings, supported, managed, applied, pending,
+qosStatus, queues and optional error. applied means bandwidth rates, IPv4/IPv6
+redirection and complete MAC filters were independently verified in the kernel;
+for custom QoS it also requires successful setters on current interfaces.
+Queue entries report direction, optional device MAC, limitKbps, bytes, packets,
+drops and overlimits. Overlimits are scheduling deferrals, not packet drops.
+Counters reset when queues are rebuilt. GET shows saved policy and operating
+queues separately; it does not change configuration.
+
+Desired settings are atomically saved in traffic-policies.json (0600). A
+manager restart, recreated interfaces and new clients trigger reconciliation.
+Renames carry settings; deletion clears the old profile before its mapping is
+removed. Failed apply, readback or persistence attempts roll back runtime
+settings and leave desired settings unchanged. Inactive networks retain
+pending settings. Wireless backups include traffic policies; old backups
+without them preserve retained policies. The native device has eight shared
+SSID queue pairs; exhausted capacity is rejected. Other firmware is refused.
+
+Speed caps do not emulate weak RF, injected latency, jitter or loss. Payload
+throughput is lower than the configured link rate because of packet overhead,
+TCP behavior and measurement timing. Reapplying limits briefly rebuilds that
+network's queues; it does not restart its radios.
+
+## Packet capture and support downloads
+
+POST /captures                  Start a job; returns 202 and its ID.
+POST /captures/{id}/stop        {}. Idempotently request cancellation.
+DELETE /captures/{id}          Delete a finished job and its file. Stop first.
+GET /captures/{id}/download    PCAP file; 409 while running or after failure.
+
+Start, stop and delete require an administrator session or a token with
+control + secrets. PCAP downloads require an administrator session or secrets.
+Viewers/monitor tokens can inspect metadata but cannot operate or download
+captures. All routes also exist under /api/v1 and require authentication.
+
+Example complete capture request:
+
+```json
+{"interface":"eth0","protocol":"udp","host":"192.0.2.10","port":5353,
+ "seconds":10,"maxBytes":1048576,"snapLength":128}
+```
+
+Select an enabled interface returned by GET /captures. "any" captures across
+interfaces; bridges and wireless data interfaces can see duplicate traffic.
+No promiscuous or monitor mode is enabled; hardware offload can hide traffic.
+This is data capture, not raw 802.11/radiotap capture. Filters are structured:
+protocol is all/arp/icmp/tcp/udp; host is a numeric IPv4/IPv6 address; port 0
+means any port and cannot be combined with ARP/ICMP. Raw BPF and command-line
+options are not accepted. There is no hostname lookup during capture.
+
+Defaults are 10 seconds, 1 MiB and 128 bytes/packet. Duration is 1–120 seconds,
+size 65536–8388608 bytes and snap length 64–4096 bytes. One capture runs at a
+time (409 on overlap). Capture stops at the first time/size limit and writes
+only complete PCAP records. Jobs report running/completed/stopped/failed,
+reason, packet/file counts, timestamps, expiry and download availability.
+Interrupted captures retain their complete packets for download. Failed files
+are discarded. A valid header-only file means zero packets matched.
+
+Up to three jobs are retained in private temporary storage for ten minutes
+after completion. A new job evicts the oldest completed job when needed.
+Manager/AP restart clears captures; Linux also signals tcpdump if the manager
+dies. Download before expiry and open the PCAP in Wireshark. Packet payloads
+can contain credentials even when only short packets are retained.
+
+POST /support-bundle returns application/zip with manifest.json, state.json,
+network.json, wireless-status.json, available management/hardware status and
+optional parsed events. includeClients defaults false; includeEvents defaults
+false, and the WebUI explicitly selects events by default. Client details and
+network-neighbour addresses follow includeClients; event client MACs are
+removed when false. Details are bounded to 512 clients/neighbours and 150
+events. Snapshots record collection times and missing/stale-data warnings.
+Only one bundle is built at once, within a 15-second collection deadline and
+a 2 MiB uncompressed/archive limit. Missing optional reads appear as warnings.
+
+Bundles omit passwords, key/token/community fields, accounts/client usernames,
+raw configuration/logs/crash dumps, nearby Wi-Fi observations and packet files.
+They retain network names, AP identifiers and management addresses. Review
+these before sharing. A support bundle is diagnostic data; use /backup for a
+restorable configuration. Both download routes return binary content on
+success and the usual JSON error object on failure; never parse them as JSON.
+
 ## Configuration endpoints (configure)
 
 Coverage follows the controls currently implemented in the WebUI. Enterprise
-RADIUS/802.1X, MAC access lists/client blocking, configurable QoS/rate limits,
+RADIUS/802.1X,
 IPv6 management, MLO, firmware updates and preferred uplink selection are not
 currently exposed. Some need additional implementation and verification;
 others encounter firmware restrictions. Webhooks/push subscriptions and
@@ -140,6 +283,7 @@ POST /ssids                    Create a network with the complete SSID body.
 PUT /ssids/{name}              Replace ordinary settings (body name permits
                                rename). Empty password preserves current key.
 DELETE /ssids/{name}           Delete a network.
+PUT /ssids/{name}/policy       Replace client access settings. See below.
 PUT /ssids/{name}/features     Merge specified advanced keys; null restores a
                                firmware default; omitted keys stay unchanged.
 PUT /ssids/{name}/schedule     {enabled,windows:[{days:[0..6],start:"HH:MM",
@@ -188,6 +332,26 @@ multicastFilter, broadcastFilter, advertiseName, plus supported native features
 listed by GET /ssids/{name}/features. Radio keys: dlOfdma, ulOfdma, dlMuMimo,
 ulMuMimo, bssColoring, spatialReuse, dtpMin, dtpMax.
 
+Client access is supported on tested C-460 firmware 18.2.0-32. Send the complete
+body, for example:
+
+```json
+{"macFilter":{"mode":"deny","addresses":["02:00:00:46:00:01"]},"maxClients":7}
+```
+
+Modes are `off`, `allow`, and `deny`. An allow list needs at least one address.
+Up to 128 unique unicast Wi-Fi MAC addresses are accepted and returned in
+canonical sorted form. Filtering off retains the saved list but clears the
+operating driver list. Phones can use a private MAC address for each network;
+use that network's address. MAC filtering supplements the Wi-Fi password.
+`maxClients` is 1–127 **per band/BSS**, or `null` for the firmware default of
+127. The response separates `settings` from `interfaces` operating readback;
+a null getter means unknown. Inactive networks have no operating readback.
+The policy follows SSID renames and is removed on deletion. Desired settings
+are saved under `/opt/c460-webui/`, restored after ordinary wireless changes,
+and included in wireless backups. Failed native/readback/persistence updates
+attempt to restore the previous owned fields and return an error.
+
 Wireless changes may interrupt Wi-Fi briefly; batch related ordinary changes.
 Management changes are staged for an explicit reboot. Check rebootRequired
 in the result before POST /reboot, then reconnect at the new management IP.
@@ -210,6 +374,9 @@ GET /ssids/{name}/join        Wi-Fi password and join payload (secrets).
 POST /backup                 {passphrase:"YOUR_BACKUP_PASSPHRASE"}; secrets.
                               Passwords included only encrypted when supplied;
                               use empty passphrase to omit passwords.
+                              Includes client access policies, including off
+                              defaults. Older backups without ssidPolicies
+                              preserve policies on retained networks.
 POST /restore                {backup,passphrase,sections:{wireless,radios,
                               management,labels,time,lldp},removeOthers,
                               management?}; configure + control + secrets.

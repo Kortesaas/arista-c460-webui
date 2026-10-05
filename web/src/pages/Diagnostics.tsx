@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router-dom'
 import { NetworkPathsPanel } from '@/components/NetworkDiagnostics'
+import { CapturePanel, SupportBundlePanel } from '@/components/PacketCapture'
 import { useEffect, useState } from 'react'
 import { Activity, Play, RefreshCw } from 'lucide-react'
 import { Page } from '@/app/Page'
@@ -10,15 +11,16 @@ import { Badge, Button, EmptyState, Field, Input, KeyValue, Panel, Select, Spinn
 
 export function DiagnosticsPage() {
   const [params, setParams] = useSearchParams()
-  const views = ['connectivity', 'paths', 'wireless'] as const
+  const views = ['connectivity', 'paths', 'wireless', 'capture', 'support'] as const
   const view = views.includes(params.get('view') as (typeof views)[number]) ? params.get('view')! : 'connectivity'
   return (
     <Page
       title="Diagnostics"
       width="settings"
-      description="Test connections from the AP and inspect its VLAN paths and wireless interfaces."
+      description="Test connections, inspect network paths, capture packets and download support data."
       actions={
         <Segmented
+          className="max-w-full flex-wrap"
           value={view}
           onChange={(value) => {
             const next = new URLSearchParams(params)
@@ -29,6 +31,8 @@ export function DiagnosticsPage() {
             { value: 'connectivity', label: 'Connectivity' },
             { value: 'paths', label: 'Network paths' },
             { value: 'wireless', label: 'Wireless' },
+            { value: 'capture', label: 'Capture' },
+            { value: 'support', label: 'Support' },
           ]}
         />
       }
@@ -36,6 +40,8 @@ export function DiagnosticsPage() {
       {view === 'connectivity' && <ConnectivityPanel />}
       {view === 'paths' && <NetworkPathsPanel />}
       {view === 'wireless' && <WirelessStatusPanel />}
+      {view === 'capture' && <CapturePanel />}
+      {view === 'support' && <SupportBundlePanel />}
     </Page>
   )
 }

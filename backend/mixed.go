@@ -372,6 +372,9 @@ func (a *API) runEnforcer(ctx context.Context) {
 			continue
 		}
 		a.overrides.Enforce(ctx, modes)
+		if err := a.ensureSSIDPolicies(); err != nil {
+			log.Printf("client access reconciliation: %v", err)
+		}
 		a.writeMu.Unlock()
 	}
 }
@@ -379,12 +382,22 @@ func (a *API) runEnforcer(ctx context.Context) {
 // snapshot is the poller state with the UI's own overrides applied.
 func (a *API) snapshot() APState {
 	st := a.poller.Snapshot()
+	st.Radios = slices.Clone(st.Radios)
+	for i, radio := range st.Radios {
+		if radio.Width > 0 {
+			width := radio.Width
+			st.Radios[i].OperatingWidth = &width
+		}
+	}
 	if a.wifi7 != nil {
-		st.Radios = slices.Clone(st.Radios)
 		for i, radio := range st.Radios {
 			if radio.Band == "6" {
 				native := a.wifi7.Snapshot()
 				st.Radios[i].WiFi7 = &native
+				if native.OperatingWidth > 0 && native.OperatingMode != "" {
+					width := native.OperatingWidth
+					st.Radios[i].OperatingWidth = &width
+				}
 				// Keep form/backup writes within OpenConfig's uint8 schema.
 				// The separately verified operating width is displayed by the UI.
 				cfg, _, ok := a.poller.RadioConfig(radio.ID)

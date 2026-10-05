@@ -99,6 +99,20 @@ func TestTokenGuardScopesAndCookieCompatibility(t *testing.T) {
 		{"POST /api/password", apiScopes, false},
 		{"PUT /api/viewer", apiScopes, false},
 		{"DELETE /api/ssids/{name}", []string{"configure"}, true},
+		{"GET /api/ssids/{name}/policy", nil, true},
+		{"PUT /api/ssids/{name}/policy", nil, false},
+		{"PUT /api/ssids/{name}/policy", []string{"control"}, false},
+		{"PUT /api/ssids/{name}/policy", []string{"configure"}, true},
+		{"GET /api/captures", nil, true},
+		{"POST /api/captures", []string{"control"}, false},
+		{"POST /api/captures", []string{"secrets"}, false},
+		{"POST /api/captures", []string{"control", "secrets"}, true},
+		{"GET /api/captures/{id}/download", nil, false},
+		{"GET /api/captures/{id}/download", []string{"secrets"}, true},
+		{"POST /api/captures/{id}/stop", []string{"control", "secrets"}, true},
+		{"DELETE /api/captures/{id}", []string{"configure"}, false},
+		{"DELETE /api/captures/{id}", []string{"control", "secrets"}, true},
+		{"POST /api/support-bundle", nil, true},
 	} {
 		t.Run(tc.pattern+strings.Join(tc.scopes, "-"), func(t *testing.T) {
 			meta, secret, err := auth.tokens.create(tokenRequest{Name: tc.pattern + strings.Join(tc.scopes, "-"), Scopes: tc.scopes})
