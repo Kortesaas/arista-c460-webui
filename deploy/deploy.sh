@@ -51,6 +51,10 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
+[[ -z "$COUNTRY" || "$COUNTRY" =~ ^[A-Za-z]{2}$ ]] || { echo "--country needs a two-letter code such as DE" >&2; exit 1; }
+[ -z "$GNMI_CREDS" ] || [ -r "$GNMI_CREDS" ] || { echo "Cannot read credentials file: $GNMI_CREDS" >&2; exit 1; }
+[ -z "$VLAN_NAMES" ] || [ -r "$VLAN_NAMES" ] || { echo "Cannot read VLAN names file: $VLAN_NAMES" >&2; exit 1; }
+
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DIR=/opt/c460-webui
 # The firmware wipes the writable layer at boot if it finds regular files in
@@ -102,6 +106,10 @@ if [ "$UNINSTALL" = 1 ]; then
 	exit $?
 fi
 
+# Check before touching files as well as after deployment. A pre-existing
+# firmware trust violation must not turn a new install into a boot-time wipe.
+trust_check
+
 if [ "$BUILD" = 1 ]; then
 	step "Building"
 	make -C "$ROOT" build
@@ -120,7 +128,6 @@ ap "mkdir -p $DIR/init && cat > $DIR/init/c460-webui && chmod 755 $DIR/init/c460
 
 if [ "$BOOTSTRAP" = 1 ]; then
 	step "Creating the OpenConfig API user and provisioning the AP"
-	[[ -z "$COUNTRY" || "$COUNTRY" =~ ^[A-Za-z]{2}$ ]] || { echo "--country needs a two-letter code such as DE" >&2; exit 1; }
 	ap "env -u LD_PRELOAD $DIR/c460-webui -config $DIR/config.json -bootstrap ${COUNTRY:+-country $COUNTRY}" || { echo "Bootstrap failed; see the message above." >&2; exit 1; }
 fi
 

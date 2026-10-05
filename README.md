@@ -33,15 +33,17 @@ The C-460 is normally managed from Arista's cloud. **arista-c460-webui** gives i
 |---|---|
 | **See what's going on** | Health checks that point at problems (clock, power, temperature, busy channels, radar, weak clients, missing backup uplink, default password). 24-hour graphs for clients, traffic, channel use and temperature. Connected clients with signal history and roaming between bands. RF scan of nearby networks. Wi-Fi events and a log of every configuration change. |
 | **Wireless networks** | Create and edit networks: WPA3, **WPA2/WPA3 mixed** for older devices, WPA2, Enhanced Open or open; 2.4/5/6 GHz; VLAN per network; client isolation; hidden networks. **Roaming between APs** (802.11r fast roaming, 802.11v, 802.11k, key caching), **band steering**, multicast and broadcast optimisation. **QR codes** for joining by phone, with a printable card. **Schedules** that turn a network on and off at set times. |
+| **Client access and traffic** | MAC allow/deny lists and client limits per band. **Upload/download caps** shared across an SSID, separate defaults per device, and overrides for individual MAC addresses. **QoS priorities** for voice/audio, video, ordinary and background traffic, plus live queue counters. Limits are **32–1,000,000 Kbps** per direction, with up to **eight shaped SSIDs**. Blank means unlimited. |
 | **Radios** | Channel, width and power per band, automatic channel and power, and a **suggested quieter channel** based on the scan. Native **6 GHz Wi-Fi 7 at 160 or 320 MHz**, with verified operating state and restoration after restart/configuration changes. Wi-Fi 6/7 tuning: **OFDMA, MU-MIMO, BSS colouring, spatial reuse** and the automatic power range. Every advanced setting shows what the firmware is actually running. |
 | **Change safely** | **Add to pending** collects several changes and applies them together, so Wi-Fi restarts once. A **read-only account** lets crew look without touching anything. **Backup and restore**, including copying the configuration to another AP. |
 | **Network and system** | Management IP (static or DHCP), gateway, DNS and management VLAN. Time servers (one click to use your router) and time zone. LLDP switch discovery. SSH on/off, locate LED, safe restart, administrator login. |
+| **Diagnose problems** | Connectivity tests, VLAN paths and live wireless interfaces. **Packet capture** with interface/IP/protocol/port filters, time and file limits, stop/delete controls and authenticated PCAP downloads. **Support bundles** with selected status and events, optional client details and no credential fields or raw logs. |
 | **Fit into your monitoring** | Read-only **SNMP** v1/v2c like your switches (system group, ifTable, ifXTable). Optional **Prometheus** `/metrics` with a token. |
 | **Everywhere** | Light and dark themes, works on phones, HTTP and HTTPS. |
 
 <table>
   <tr>
-    <td width="66%"><img src="docs/images/wireless.jpg" alt="Wireless networks"></td>
+    <td width="66%"><img src="docs/images/wireless-traffic-layout.png" alt="Wireless networks with traffic controls and shaping limits"></td>
     <td width="34%" rowspan="2"><img src="docs/images/mobile.jpg" alt="Overview on a phone"></td>
   </tr>
   <tr>
@@ -61,7 +63,7 @@ This takes about 20 minutes per AP. You do steps 1–4 once on each AP; step 5 i
 
 - An **Arista C-460** with firmware **18.2.0-32** (other versions are untested).
 - **PoE 802.3at** (PoE+) or better. 802.3af works but reduces radio power.
-- A computer on the same network with **git**, **Go ≥ 1.26**, **Node.js ≥ 20**, **make** and an **SSH key** (`ls ~/.ssh/id_ed25519.pub`; create one with `ssh-keygen -t ed25519` if it is missing).
+- A computer on the same network with **git**, **Go ≥ 1.26**, **Node.js ≥ 22.12** (24 LTS recommended), **make**, **Bash**, **Python 3**, **curl** and an **SSH key** (`ls ~/.ssh/id_ed25519.pub`; create one with `ssh-keygen -t ed25519` if it is missing).
 - Optional but recommended: a **USB serial console cable** (115200 baud, 8N1) in case the network is not reachable.
 
 Get the code:
@@ -152,6 +154,13 @@ The script:
 5. installs and starts the service so it also starts after every reboot, and
 6. runs the firmware's **boot-time trust check**, so you know a restart will not wipe the installation ([why this matters](#the-firmwares-boot-time-trust-check)).
 
+The trust check also runs before any deployment files are changed. If bootstrap
+is interrupted by provisioning or a restart, wait until the AP is reachable and
+run the same command again. Its replacement API credentials are saved privately
+in `/opt/c460-webui/config.json.bootstrap` before the AP is changed, then moved
+into `config.json` after verification. Keep that recovery file if setup fails;
+it is removed automatically after a successful run.
+
 ### 6. First visit
 
 Open `http://192.168.1.40/` (or `https://…`; your browser warns once about the self-signed certificate) and sign in. Then work through this short list:
@@ -163,7 +172,37 @@ Open `http://192.168.1.40/` (or `https://…`; your browser warns once about the
 
 ### More access points
 
-Repeat steps 1–5 for each AP. Then, on the new AP, open **System → Backup and restore → Choose file…** and pick the backup from your first AP. Its networks, radios, advanced roaming and radio settings and time settings are copied over; the Wi-Fi passwords come along if the backup was made with a passphrase. For roaming between APs, use the same network names and turn on **Fast roaming (802.11r)** under each network's advanced settings; the roaming domain is derived from the network name, so it matches automatically. The new AP keeps its own name and IP address unless you choose otherwise.
+Use the same root-SSH deployment procedure on every AP. A factory-fresh C-460
+still needs steps 1–4 above: cloud discovery disabled, OpenConfig enabled and
+your SSH public key added. No AP-specific credentials or configuration belong
+in this repository; `--bootstrap` creates a separate API login on each AP.
+
+Build once on your computer, then reuse that binary for every prepared AP:
+
+```bash
+git pull --ff-only
+make build
+deploy/deploy.sh 192.168.1.41 --no-build --bootstrap --country DE --site-name "Stage left"
+deploy/deploy.sh 192.168.1.42 --no-build --bootstrap --country DE --site-name "Stage right"
+```
+
+Replace the example addresses, country and names with yours. Each deployment
+asks for that AP's WebUI login. If you use a non-default SSH key or a dedicated
+host-key file, add `--ssh-key /path/to/private-key` and
+`--known-hosts /path/to/known_hosts` to each command. Future updates on these
+APs use `deploy/deploy.sh <ap-address> --no-build` after a new `make build`;
+`--bootstrap` is only needed for initial setup or resuming it.
+
+To copy settings, on the new AP open **System → Backup and restore → Choose
+file…** and pick a backup from your first AP. Networks, client access and traffic
+policies, radios, advanced roaming/radio settings and time settings are copied
+when their corresponding sections are selected. Wi-Fi passwords come along if
+the backup was made with a passphrase. Leave **management** and **labels**
+unselected to keep the new AP's own address and display name. Review per-device
+MAC lists/limits before copying them to a network with different test devices.
+For roaming, use the same network names and turn on **Fast roaming (802.11r)**
+under each network's advanced settings; the roaming domain is derived from the
+network name, so it matches automatically.
 
 ---
 
@@ -275,7 +314,7 @@ That is why everything this project installs lives in `/opt/c460-webui/`, with o
 
 Computers on the management network can monitor and configure the AP through
 `/api/v1` on its existing HTTP/HTTPS listener. The API exposes the controls
-implemented in the WebUI, with 65 operations for local integrations; it does
+implemented in the WebUI for local integrations; it does
 not claim to expose the complete Arista controller or firmware feature set.
 
 In **System → API access**, create
@@ -287,7 +326,7 @@ as hashes, survive restarts, and can expire automatically. Send the token in an
 | Area | API coverage |
 |---|---|
 | Monitoring | Device resources, CPU usage, clients, radio utilization, nearby networks, Ethernet counters, health, history, events and audit log |
-| Wireless configuration | SSIDs, security/passwords, band selection, VLAN mappings, isolation, schedules and supported advanced features |
+| Wireless configuration | SSID settings, VLAN mappings, isolation, schedules, MAC allow/deny lists, client limits, upload/download caps per network/device, QoS priorities and supported advanced features |
 | Radio configuration | Channels, widths, transmit power, automatic channel/power settings, advanced features and native 6 GHz Wi-Fi 7 at 160/320 MHz |
 | Management and services | IPv4 address, gateway, DNS, management VLAN, NTP/time zone, LLDP, SNMP, Prometheus, labels and sampling cadence |
 | Diagnostics and actions | Ping, DNS, traceroute, TCP tests, native status, client reconnect, identify LEDs, SSH enable/disable, reboot and configuration backup/restore |
@@ -303,8 +342,8 @@ client; the guide explains certificate setup.
 
 ### Coverage limits
 
-The API does not currently offer RADIUS/802.1X enterprise Wi-Fi, client blocking
-or MAC access lists, configurable QoS/bandwidth limits, IPv6 management settings,
+The API does not currently offer RADIUS/802.1X enterprise Wi-Fi,
+IPv6 management settings,
 Wi-Fi 7 MLO, firmware updates, or preferred Ethernet uplink selection. It also
 does not provide webhooks/push subscriptions or persistent historical metrics;
 integrations poll snapshots and can store their own history.
@@ -338,7 +377,7 @@ python3 examples/c460_client.py GET 'clients?ssid=FOH-MGMT'
 ## Development
 
 ```bash
-make check                                     # go vet + TypeScript
+make check                                     # Go vet/tests, shell syntax, TypeScript and UI tests
 make build                                     # web + ARM64 binary in build/
 ssh -L 18099:127.0.0.1:80 root@<ap>            # tunnel to an installed backend
 make dev                                       # Vite on http://localhost:5175, /api proxied to the tunnel
@@ -370,6 +409,7 @@ repository root with `go test ./...`.
 - Management configuration covers IPv4 only. DHCP mode makes the AP a DHCP client, not a server; addresses for Wi-Fi clients come from your router.
 - The firmware chooses the active uplink itself (whichever Ethernet port has a link); there is no preferred-port setting.
 - Some fields in the OpenConfig model are rejected by this firmware (for example DHCP-required and some 802.11r/v timers), so they are not offered.
-- Blocking individual clients is not offered: the firmware's MAC filter cannot be reached through OpenConfig.
+- Persistent MAC allow/deny lists and client limits are available under **Wireless networks → Client access** on tested firmware 18.2.0-32. Limits apply separately to each band. These controls use the legacy native path; see [device verification](docs/native-features.md).
 - History is kept in memory and starts empty after the service restarts.
 - Firmware upgrades and factory resets remove the installation; repeat the setup afterwards.
+- Bandwidth limits are available per network and device: 32–1,000,000 decimal Kbps per direction, or unlimited, with up to eight shaped SSIDs. The shared SSID cap spans its bands and devices. Caps do not inject weak signal, latency, jitter or loss. QoS marking was verified; relative priorities under competing wireless loads remain unmeasured. See [the API guide](docs/api.md#bandwidth-limits-and-qos).

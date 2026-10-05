@@ -14,6 +14,9 @@ backend:
 
 check:
 	$(GO) vet ./...
+	$(GO) test ./...
+	bash -n deploy/deploy.sh deploy/unlock-commands.sh
+	sh -n deploy/overlay-check.sh deploy/c460-webui.init
 	cd web && npm run typecheck && npm test
 
 # Frontend dev server; proxies /api to C460_BACKEND (default http://127.0.0.1:18099,

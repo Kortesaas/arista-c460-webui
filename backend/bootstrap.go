@@ -31,6 +31,17 @@ type bootstrapOptions struct {
 	loginPass  string
 }
 
+type bootstrapAgent interface {
+	getAs(context.Context, string, string, *gpb.Path) (map[string]any, error)
+	setAs(context.Context, string, string, *gpb.Path, any) error
+	apPath(...*gpb.PathElem) *gpb.Path
+}
+
+type bootstrapCredentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 // set sends one JSON_IETF update authenticated as user/pass.
 func (g *GNMI) setAs(parent context.Context, user, pass string, path *gpb.Path, value any) error {
 	var buf bytes.Buffer
@@ -70,6 +81,22 @@ func (g *GNMI) getAs(parent context.Context, user, pass string, path *gpb.Path) 
 }
 
 func runBootstrap(opts bootstrapOptions) error {
+	macRaw, err := os.ReadFile("/sys/class/net/eth0/address")
+	if err != nil {
+		return fmt.Errorf("read eth0 MAC: %w", err)
+	}
+	mac := strings.ToUpper(strings.TrimSpace(string(macRaw)))
+	hostname := strings.ReplaceAll(mac, ":", "-")
+	defaults := GNMIConfig{Address: "127.0.0.1:8080", CertFile: "/opt/openconfig/cert/agent.crt", ServerName: "openconfig.mojonetworks.com", Origin: "openconfig.mojonetworks.com"}
+	g, err := DialGNMI(defaults, hostname)
+	if err != nil {
+		return fmt.Errorf("OpenConfig agent: %w (is OpenConfig mode enabled?)", err)
+	}
+	defer g.Close()
+	return bootstrapWithAgent(opts, mac, g)
+}
+
+func bootstrapWithAgent(opts bootstrapOptions, mac string, g bootstrapAgent) error {
 	opts.country = strings.ToUpper(strings.TrimSpace(opts.country))
 	if opts.country != "" && !countryPattern.MatchString(opts.country) {
 		return fmt.Errorf("country must be a two-letter code such as DE, got %q", opts.country)
@@ -81,6 +108,11 @@ func runBootstrap(opts bootstrapOptions) error {
 		if err := json.Unmarshal(raw, &cfg); err != nil {
 			return fmt.Errorf("%s: %w", opts.configPath, err)
 		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("read %s: %w", opts.configPath, err)
+	}
+	if cfg == nil {
+		return errors.New("configuration must be a JSON object")
 	}
 	gnmiCfg, _ := cfg["gnmi"].(map[string]any)
 	if gnmiCfg == nil {
@@ -88,35 +120,36 @@ func runBootstrap(opts bootstrapOptions) error {
 	}
 	apiUser, _ := gnmiCfg["username"].(string)
 	apiPass, _ := gnmiCfg["password"].(string)
-	loginUser, loginPass := opts.loginUser, opts.loginPass
-	if apiUser != "" && apiPass != "" {
-		loginUser, loginPass = apiUser, apiPass // already set up: stay with our own user
-		fmt.Printf("Using the existing API user %q from %s\n", apiUser, opts.configPath)
-	} else {
-		token, err := newToken()
-		if err != nil {
-			return err
+	saved := apiUser != "" && apiPass != ""
+	pendingPath := opts.configPath + ".bootstrap"
+	pending := false
+	if !saved {
+		if raw, err := os.ReadFile(pendingPath); err == nil {
+			var creds bootstrapCredentials
+			if err := json.Unmarshal(raw, &creds); err != nil || creds.Username == "" || creds.Password == "" {
+				return fmt.Errorf("bootstrap recovery file %s is invalid; keep it for recovery", pendingPath)
+			}
+			apiUser, apiPass, pending = creds.Username, creds.Password, true
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("read bootstrap recovery file: %w", err)
 		}
-		apiUser, apiPass = bootstrapAPIUser, token
 	}
-
-	macRaw, err := os.ReadFile("/sys/class/net/eth0/address")
-	if err != nil {
-		return fmt.Errorf("read eth0 MAC: %w", err)
+	loginUser, loginPass := opts.loginUser, opts.loginPass
+	if saved || pending {
+		loginUser, loginPass = apiUser, apiPass // already set up: stay with our own user
+		fmt.Printf("Using saved API user %q\n", apiUser)
 	}
-	mac := strings.ToUpper(strings.TrimSpace(string(macRaw)))
 	hostname := strings.ReplaceAll(mac, ":", "-")
-
-	defaults := GNMIConfig{Address: "127.0.0.1:8080", CertFile: "/opt/openconfig/cert/agent.crt", ServerName: "openconfig.mojonetworks.com", Origin: "openconfig.mojonetworks.com"}
-	g, err := DialGNMI(defaults, hostname)
-	if err != nil {
-		return fmt.Errorf("OpenConfig agent: %w (is OpenConfig mode enabled?)", err)
-	}
-	defer g.Close()
 	ctx := context.Background()
-
-	provPath := &gpb.Path{Origin: defaults.Origin, Elem: []*gpb.PathElem{elem("provision-aps"), elem("provision-ap", "mac", mac)}}
-	current, err := g.getAs(ctx, loginUser, loginPass, &gpb.Path{Origin: defaults.Origin, Elem: []*gpb.PathElem{elem("provision-aps")}})
+	provPath := &gpb.Path{Origin: g.apPath().Origin, Elem: []*gpb.PathElem{elem("provision-aps"), elem("provision-ap", "mac", mac)}}
+	provisions := &gpb.Path{Origin: provPath.Origin, Elem: []*gpb.PathElem{elem("provision-aps")}}
+	current, err := g.getAs(ctx, loginUser, loginPass, provisions)
+	if err != nil && pending {
+		// An interrupted run may have saved the replacement credentials before
+		// the AP accepted them. Only that recovery state permits factory login.
+		loginUser, loginPass = opts.loginUser, opts.loginPass
+		current, err = g.getAs(ctx, loginUser, loginPass, provisions)
+	}
 	if err != nil {
 		return fmt.Errorf("sign-in to the OpenConfig agent as %q failed: %w", loginUser, err)
 	}
@@ -138,6 +171,22 @@ func runBootstrap(opts bootstrapOptions) error {
 	}
 	if country == "" {
 		return errors.New("this AP is not provisioned yet: pass the regulatory country, e.g. --country DE")
+	}
+	if !saved && !pending {
+		token, err := newToken()
+		if err != nil {
+			return err
+		}
+		apiUser, apiPass = bootstrapAPIUser, token
+		raw, err := json.Marshal(bootstrapCredentials{Username: apiUser, Password: apiPass})
+		if err != nil {
+			return err
+		}
+		// Persist before provisioning or retiring the factory login. A radio
+		// restart, reboot or lost response must not lose the only API password.
+		if err := atomicNative(pendingPath, raw, 0o600); err != nil {
+			return fmt.Errorf("save bootstrap recovery credentials: %w", err)
+		}
 	}
 	if country != existingCountry {
 		fmt.Printf("Provisioning %s as %s, country %s. A country change makes the AP restart its radios or reboot.\n", mac, hostname, country)
@@ -162,6 +211,11 @@ func runBootstrap(opts bootstrapOptions) error {
 		if setErr = g.setAs(ctx, loginUser, loginPass, g.apPath(), apBody); setErr == nil {
 			break
 		}
+		if _, err := g.getAs(ctx, apiUser, apiPass, g.apPath()); err == nil {
+			// The update reached the AP even if its response was lost.
+			setErr = nil
+			break
+		}
 		time.Sleep(5 * time.Second)
 	}
 	if setErr != nil {
@@ -181,6 +235,9 @@ func runBootstrap(opts bootstrapOptions) error {
 	raw, _ := json.MarshalIndent(cfg, "", "  ")
 	if err := atomicNative(opts.configPath, raw, 0o600); err != nil {
 		return err
+	}
+	if err := os.Remove(pendingPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("API credentials saved, but recovery file cleanup failed: %w", err)
 	}
 	fmt.Printf("OpenConfig API user %q is ready and saved in %s\n", apiUser, opts.configPath)
 	return nil
