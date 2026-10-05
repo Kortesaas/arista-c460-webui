@@ -4,7 +4,7 @@ import { api } from '@/api'
 import { useApp } from '@/stores/app'
 import { Button, Dialog, DialogActions, Field, Input, KeyValue, Panel, Spinner } from '@/ui/kit'
 
-/** A second login that can see everything but change nothing, e.g. for crew members. */
+/** A second login for read-only access to AP status. */
 export function ViewerPanel() {
   const { viewer, setViewer, toast, role } = useApp()
   const [editing, setEditing] = useState(false)
@@ -76,7 +76,7 @@ export function ViewerPanel() {
 
 function ViewerDialog({ current, onClose }: { current: string; onClose: () => void }) {
   const { setViewer, toast, username: admin } = useApp()
-  const [username, setUsername] = useState(current || 'crew')
+  const [username, setUsername] = useState(current || 'viewer')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)

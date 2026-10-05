@@ -58,7 +58,7 @@ curl --cacert "$C460_CA" -H "Authorization: Bearer $C460_TOKEN" \
   "$C460_URL/api/v1/device"
 
 curl --cacert "$C460_CA" -H "Authorization: Bearer $C460_TOKEN" \
-  "$C460_URL/api/v1/clients?ssid=FOH-MGMT&band=6"
+  "$C460_URL/api/v1/clients?ssid=Management&band=6"
 
 Python client and CLI: examples/c460_client.py in the repository.
 It uses only Python's standard library and runs on Raspberry Pi OS.
@@ -181,12 +181,12 @@ Optional qos is null to restore native firmware settings, or a complete object:
 priority: voice, video, best-effort or background. mode: ceiling (retain lower
 packet priorities) or fixed (assign the network priority). mapping selects
 downstream dscp, 8021p or legacy tos. markDSCP and mark8021p enable upstream
-marking. Dedicated audio/control networks can use fixed voice; mixed traffic
-can use a voice ceiling and DSCP from the sending devices. These are WMM
+marking. Fixed mode assigns the selected priority to every packet; ceiling
+mode preserves lower packet priorities using the selected mapping. These are WMM
 traffic classes, not automatic application recognition or reserved airtime.
 The driver has no exact operating QoS getter: qosStatus explicitly reports
 configured-no-driver-readback, pending or error. Configuration acceptance does
-not establish relative performance under competing audio/video loads.
+not establish relative performance under competing traffic loads.
 
 The response contains settings, supported, managed, applied, pending,
 qosStatus, queues and optional error. applied means bandwidth rates, IPv4/IPv6
@@ -297,7 +297,7 @@ POST /batch                   {changes:[{kind:"ssid-create"|"ssid-update"|
 PUT /management               {mode:"static"|"dhcp",ipv4,netmask,gateway,
                                dns:[...],dnsSearch,commVlan?}. "untagged" for
                                native management VLAN; omit to preserve it.
-PUT /settings                 {siteName,vlanNames:{"10":"Control",...}}.
+PUT /settings                 {siteName,vlanNames:{"10":"Management",...}}.
 PUT /refresh                  {seconds}; changes sampling cadence globally.
 PUT /time                     {primary,secondary} (NTP names/addresses).
 PUT /timezone                 {timeZone:"Europe/Berlin"} (IANA zone).

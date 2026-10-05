@@ -26,7 +26,7 @@ func fixtureFile(t *testing.T, path, content string) {
 
 func TestRefreshStorageAndValidation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
-	fixtureFile(t, path, `{"hostname":"test-ap","pollSeconds":5,"siteName":"FOH","vlanNames":{"10":"Control"},"gnmi":{"username":"api-user","password":"fixture-secret"}}`)
+	fixtureFile(t, path, `{"hostname":"test-ap","pollSeconds":5,"siteName":"Test AP","vlanNames":{"10":"Management"},"gnmi":{"username":"api-user","password":"fixture-secret"}}`)
 	cfg, err := loadConfig(path)
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +46,7 @@ func TestRefreshStorageAndValidation(t *testing.T) {
 	if err != nil || w.Code != 200 || loaded.RefreshSeconds() != 1 || p.interval != time.Second || p.Snapshot().PollSeconds != 1 {
 		t.Fatal("update not stored/applied", w.Code, err)
 	}
-	if loaded.GNMI != cfg.GNMI || loaded.SiteName != "FOH" || loaded.VLANNames["10"] != "Control" {
+	if loaded.GNMI != cfg.GNMI || loaded.SiteName != "Test AP" || loaded.VLANNames["10"] != "Management" {
 		t.Fatal("unrelated config changed")
 	}
 	info, _ := os.Stat(path)
@@ -59,7 +59,7 @@ func TestRefreshStorageAndValidation(t *testing.T) {
 	if w.Code != 500 || cfg.RefreshSeconds() != 1 || p.interval != time.Second {
 		t.Fatal("failed save changed runtime interval")
 	}
-	if err = cfg.SetLabels("Lost", map[string]string{}); err == nil || cfg.SiteName != "FOH" || cfg.VLANNames["10"] != "Control" {
+	if err = cfg.SetLabels("Lost", map[string]string{}); err == nil || cfg.SiteName != "Test AP" || cfg.VLANNames["10"] != "Management" {
 		t.Fatal("failed label save changed config")
 	}
 }

@@ -70,7 +70,7 @@ SSID TBF queues expose a virtual class 1:1, which is explicitly distinguished
 from unexpected client classes. Inactive networks save pending settings;
 renames/deletions release old profile queues before their mapping disappears.
 
-A real phone on FOH-6G-TEST (6 GHz) measured 902.67 Mbps download and 318.49
+A real phone on a 6 GHz test network measured 902.67 Mbps download and 318.49
 Mbps upload without caps. A 4,000 Kbps down / 1,000 Kbps up SSID cap measured
 3.69 / 0.42 Mbps; a MAC-only cap measured 3.76 / 0.70 Mbps. Browser uploads
 count only completed requests, so low-rate upload results omit transfers
@@ -85,7 +85,7 @@ Fixed voice priority with upstream DSCP marking produced IPv4 TOS 0xb8
 cap. Voice/video/best-effort/background, ceiling/fixed, DSCP/802.1p/TOS
 mapping and upstream marking are configurable. The driver has no exact QoS
 operating getter; the API/UI explicitly distinguish accepted configuration
-from operating readback. Relative audio/control/video performance under
+from operating readback. Relative traffic-priority performance under
 competing wireless loads remains unmeasured. Rate caps do not simulate weak
 RF, injected delay, jitter or packet loss.
 

@@ -33,9 +33,9 @@ The C-460 is normally managed from Arista's cloud. **arista-c460-webui** gives i
 |---|---|
 | **See what's going on** | Health checks that point at problems (clock, power, temperature, busy channels, radar, weak clients, missing backup uplink, default password). 24-hour graphs for clients, traffic, channel use and temperature. Connected clients with signal history and roaming between bands. RF scan of nearby networks. Wi-Fi events and a log of every configuration change. |
 | **Wireless networks** | Create and edit networks: WPA3, **WPA2/WPA3 mixed** for older devices, WPA2, Enhanced Open or open; 2.4/5/6 GHz; VLAN per network; client isolation; hidden networks. **Roaming between APs** (802.11r fast roaming, 802.11v, 802.11k, key caching), **band steering**, multicast and broadcast optimisation. **QR codes** for joining by phone, with a printable card. **Schedules** that turn a network on and off at set times. |
-| **Client access and traffic** | MAC allow/deny lists and client limits per band. **Upload/download caps** shared across an SSID, separate defaults per device, and overrides for individual MAC addresses. **QoS priorities** for voice/audio, video, ordinary and background traffic, plus live queue counters. Limits are **32–1,000,000 Kbps** per direction, with up to **eight shaped SSIDs**. Blank means unlimited. |
+| **Client access and traffic** | MAC allow/deny lists and client limits per band. **Upload/download caps** shared across an SSID, separate defaults per device, and overrides for individual MAC addresses. **QoS priorities** for the standard voice, video, best-effort and background traffic classes, plus live queue counters. Limits are **32–1,000,000 Kbps** per direction, with up to **eight shaped SSIDs**. Blank means unlimited. |
 | **Radios** | Channel, width and power per band, automatic channel and power, and a **suggested quieter channel** based on the scan. Native **6 GHz Wi-Fi 7 at 160 or 320 MHz**, with verified operating state and restoration after restart/configuration changes. Wi-Fi 6/7 tuning: **OFDMA, MU-MIMO, BSS colouring, spatial reuse** and the automatic power range. Every advanced setting shows what the firmware is actually running. |
-| **Change safely** | **Add to pending** collects several changes and applies them together, so Wi-Fi restarts once. A **read-only account** lets crew look without touching anything. **Backup and restore**, including copying the configuration to another AP. |
+| **Change safely** | **Add to pending** collects several changes and applies them together, so Wi-Fi restarts once. A **read-only account** lets other users look without touching anything. **Backup and restore**, including copying the configuration to another AP. |
 | **Network and system** | Management IP (static or DHCP), gateway, DNS and management VLAN. Time servers (one click to use your router) and time zone. LLDP switch discovery. SSH on/off, locate LED, safe restart, administrator login. |
 | **Diagnose problems** | Connectivity tests, VLAN paths and live wireless interfaces. **Packet capture** with interface/IP/protocol/port filters, time and file limits, stop/delete controls and authenticated PCAP downloads. **Support bundles** with selected status and events, optional client details and no credential fields or raw logs. |
 | **Fit into your monitoring** | Read-only **SNMP** v1/v2c like your switches (system group, ifTable, ifXTable). Optional **Prometheus** `/metrics` with a token. |
@@ -142,7 +142,7 @@ ssh root@192.168.1.40 whoami
 From the project folder on your computer, with your regulatory country (`DE`, `AT`, `CH`, `GB`, `US`…) and a name for the AP:
 
 ```bash
-deploy/deploy.sh 192.168.1.40 --bootstrap --country DE --site-name "Stage left"
+deploy/deploy.sh 192.168.1.40 --bootstrap --country DE --site-name "AP 1"
 ```
 
 The script:
@@ -182,8 +182,8 @@ Build once on your computer, then reuse that binary for every prepared AP:
 ```bash
 git pull --ff-only
 make build
-deploy/deploy.sh 192.168.1.41 --no-build --bootstrap --country DE --site-name "Stage left"
-deploy/deploy.sh 192.168.1.42 --no-build --bootstrap --country DE --site-name "Stage right"
+deploy/deploy.sh 192.168.1.41 --no-build --bootstrap --country DE --site-name "AP 1"
+deploy/deploy.sh 192.168.1.42 --no-build --bootstrap --country DE --site-name "AP 2"
 ```
 
 Replace the example addresses, country and names with yours. Each deployment
@@ -217,7 +217,7 @@ deploy/deploy.sh 192.168.1.40
 
 **Several changes at once.** Every save restarts Wi-Fi on the AP for a few seconds. To change several networks or radios, use **Add to pending** in each dialog and then **Apply all** in the bar at the bottom.
 
-**Crew access.** **System → Read-only account** creates a second login that sees everything but cannot change settings, see passwords or restart the AP.
+**Read-only access.** **System → Read-only account** creates a second login that sees everything but cannot change settings, see passwords or restart the AP.
 
 **Who changed what.** **Events → Configuration changes** lists every change with user, address and details. Scheduled on/off switches appear there too.
 
@@ -371,7 +371,7 @@ and other computers with Python 3.
 ```bash
 # Set C460_URL, C460_TOKEN and C460_CA for your AP first (see the API guide).
 python3 examples/c460_client.py GET device
-python3 examples/c460_client.py GET 'clients?ssid=FOH-MGMT'
+python3 examples/c460_client.py GET 'clients?ssid=Management'
 ```
 
 ## Development

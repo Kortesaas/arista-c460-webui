@@ -47,9 +47,9 @@ class ClientTest(unittest.TestCase):
         self.server.server_close()
 
     def test_filters_encoded_names_and_json(self):
-        self.client.clients('FOH & MGMT', '6')
-        self.assertEqual(self.requests[0], ('/api/v1/clients?ssid=FOH+%26+MGMT&band=6', 'Bearer test-secret'))
-        result = self.client.update_ssid('FOH MGMT', {'enabled': True})
+        self.client.clients('Test & Network', '6')
+        self.assertEqual(self.requests[0], ('/api/v1/clients?ssid=Test+%26+Network&band=6', 'Bearer test-secret'))
+        result = self.client.update_ssid('Test Network', {'enabled': True})
         self.assertEqual(result, {'body': {'enabled': True}, 'type': 'application/json'})
 
     def test_errors_and_no_redirects(self):

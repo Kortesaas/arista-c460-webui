@@ -239,7 +239,7 @@ func TestPolicyAPIRequiresAuthenticationAndRejectsViewerWrites(t *testing.T) {
 			t.Fatal("anonymous policy access", w.Code)
 		}
 		session := httptest.NewRecorder()
-		if err := a.auth.NewSession(session, "crew", RoleViewer); err != nil {
+		if err := a.auth.NewSession(session, "viewer", RoleViewer); err != nil {
 			t.Fatal(err)
 		}
 		r = httptest.NewRequest(http.MethodPut, path, strings.NewReader(`{"macFilter":{"mode":"off","addresses":[]},"maxClients":null}`))

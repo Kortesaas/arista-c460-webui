@@ -8,7 +8,7 @@ import { formatBytes } from '@/utils/format'
 
 const emptyLimits = (): TrafficLimits => ({ uploadKbps: null, downloadKbps: null })
 const defaultQoS = (): TrafficQoS => ({ priority: 'best-effort', mode: 'ceiling', mapping: 'dscp', markDSCP: false, mark8021p: false })
-const priorityLabels = { voice: 'Voice / audio / control', video: 'Video', 'best-effort': 'Best effort', background: 'Background' }
+const priorityLabels = { voice: 'Voice', video: 'Video', 'best-effort': 'Best effort', background: 'Background' }
 const validMAC = (v: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(v) && (parseInt(v.slice(0, 2), 16) & 1) === 0 && v !== '00:00:00:00:00:00'
 
 export function TrafficLimitsHint() {
@@ -81,7 +81,7 @@ export function TrafficDialog({ name, clientMAC, onClose }: { name: string; clie
             <Toggle checked={qos.markDSCP} disabled={disabled} label="Mark upstream DSCP" onChange={(markDSCP) => setQoS({ markDSCP })} />
             <Toggle checked={qos.mark8021p} disabled={disabled} label="Mark upstream VLAN priority" hint="Relevant to networks with a tagged VLAN." onChange={(mark8021p) => setQoS({ mark8021p })} />
           </>}
-          <p className="text-[12px] leading-5 text-muted">Priorities matter when traffic competes for airtime. Choose fixed voice for a dedicated audio/control network, or DSCP with a voice ceiling to retain packet priorities. The driver accepts these settings but exposes no operating QoS readback.</p>
+          <p className="text-[12px] leading-5 text-muted">Priorities matter when traffic competes for airtime. Fixed mode assigns the selected priority to all traffic; ceiling mode retains lower packet priorities using the selected mapping. The driver accepts these settings but exposes no operating QoS readback.</p>
         </div>
         <p className="border-t border-line pt-3 text-[12px] leading-5 text-muted">Bandwidth caps help test slow connections. They do not introduce weak signal, latency, jitter or packet loss.</p>
       </>}

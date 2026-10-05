@@ -206,7 +206,7 @@ func TestTrafficAPIRequiresCompleteSettingsAndPermissions(t *testing.T) {
 			t.Fatal(w.Code)
 		}
 		session := httptest.NewRecorder()
-		a.auth.NewSession(session, "crew", RoleViewer)
+		a.auth.NewSession(session, "viewer", RoleViewer)
 		r := httptest.NewRequest("PUT", path, strings.NewReader(`{}`))
 		r.Header.Set("Content-Type", "application/json")
 		r.AddCookie(session.Result().Cookies()[0])

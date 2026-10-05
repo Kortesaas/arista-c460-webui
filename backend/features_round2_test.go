@@ -200,21 +200,21 @@ func TestAuthRoles(t *testing.T) {
 	if err := a.SetViewer("config", "viewer-secret"); err == nil {
 		t.Fatal("viewer took the admin name")
 	}
-	if err := a.SetViewer("crew", "viewer-secret"); err != nil {
+	if err := a.SetViewer("viewer", "viewer-secret"); err != nil {
 		t.Fatal(err)
 	}
 	r := httptest.NewRequest("POST", "/api/login", nil)
-	if role, err := a.Check(r, "crew", "viewer-secret"); err != nil || role != RoleViewer {
+	if role, err := a.Check(r, "viewer", "viewer-secret"); err != nil || role != RoleViewer {
 		t.Fatalf("viewer %v %v", role, err)
 	}
 	if role, err := a.Check(r, "config", "admin-secret"); err != nil || role != RoleAdmin {
 		t.Fatalf("admin %v %v", role, err)
 	}
-	if _, err := a.Check(r, "crew", "admin-secret"); !errors.Is(err, errBadPassword) {
+	if _, err := a.Check(r, "viewer", "admin-secret"); !errors.Is(err, errBadPassword) {
 		t.Fatal("viewer accepted the admin password")
 	}
 	// Changing the admin login keeps the viewer.
-	if err := a.SetCredentials("boss", "admin-secret2"); err != nil || a.ViewerName() != "crew" {
+	if err := a.SetCredentials("administrator", "admin-secret2"); err != nil || a.ViewerName() != "viewer" {
 		t.Fatalf("viewer lost: %v %q", err, a.ViewerName())
 	}
 }
@@ -223,13 +223,13 @@ func TestViewerCannotWrite(t *testing.T) {
 	dir := t.TempDir()
 	auth := NewAuth(filepath.Join(dir, "auth.json"))
 	_ = auth.SetCredentials("config", "admin-secret")
-	_ = auth.SetViewer("crew", "viewer-secret")
+	_ = auth.SetViewer("viewer", "viewer-secret")
 	api := &API{auth: auth, changes: NewChangeLog(filepath.Join(dir, "changes.json"))}
 	called := false
 	h := api.write(func(w http.ResponseWriter, r *http.Request) { called = true; reply(w, 200, nil) })
 
 	rec := httptest.NewRecorder()
-	if err := auth.NewSession(rec, "crew", RoleViewer); err != nil {
+	if err := auth.NewSession(rec, "viewer", RoleViewer); err != nil {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest("PUT", "/api/refresh", strings.NewReader(`{"seconds":5}`))

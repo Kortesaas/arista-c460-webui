@@ -163,7 +163,7 @@ func TestVersionedResourcesAndSpecification(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &API{auth: auth, changes: NewChangeLog(""), poller: &Poller{state: APState{GeneratedAt: time.Now(), PollSeconds: 5, Clients: []Client{{MAC: "aa:bb:cc:dd:ee:ff", SSID: "FOH MGMT", Band: "6"}, {MAC: "11:22:33:44:55:66", SSID: "Other", Band: "5"}}}}}
+	a := &API{auth: auth, changes: NewChangeLog(""), poller: &Poller{state: APState{GeneratedAt: time.Now(), PollSeconds: 5, Clients: []Client{{MAC: "aa:bb:cc:dd:ee:ff", SSID: "Test Network", Band: "6"}, {MAC: "11:22:33:44:55:66", SSID: "Other", Band: "5"}}}}}
 	mux := http.NewServeMux()
 	a.Register(mux)
 	get := func(path string) *httptest.ResponseRecorder {
@@ -173,7 +173,7 @@ func TestVersionedResourcesAndSpecification(t *testing.T) {
 		mux.ServeHTTP(w, r)
 		return w
 	}
-	w := get("/api/v1/clients?ssid=FOH+MGMT&band=6")
+	w := get("/api/v1/clients?ssid=Test+Network&band=6")
 	if w.Code != 200 || w.Header().Get("X-API-Version") != "1" || w.Header().Get("X-Poll-Seconds") != "5" || strings.Contains(w.Body.String(), "Other") {
 		t.Fatalf("filtered resource: %d %s", w.Code, w.Body.String())
 	}

@@ -23,7 +23,7 @@ const SECURITY = ['WPA3_SAE', 'WPA2_WPA3_PERSONAL', 'WPA2_PERSONAL', 'ENHANCED_O
 const needsPassword = (mode: string) => mode === 'WPA3_SAE' || mode === 'WPA2_WPA3_PERSONAL' || mode === 'WPA2_PERSONAL'
 const allows6 = (mode: string) => mode === 'WPA3_SAE' || mode === 'ENHANCED_OPEN'
 const securityHint: Record<string, string> = {
-  WPA3_SAE: 'Most secure. Some older devices (lighting consoles, audio gear, older phones) cannot join.',
+  WPA3_SAE: 'Most secure. Older devices without WPA3 support cannot join.',
   WPA2_WPA3_PERSONAL: 'Older devices join with WPA2, newer ones use WPA3. Works on 2.4 and 5 GHz; use a separate WPA3 network for 6 GHz.',
   WPA2_PERSONAL: 'Only for devices that fail with WPA2/WPA3 mixed. Not allowed on 6 GHz.',
   ENHANCED_OPEN: 'No password, but traffic is encrypted. Not every device supports it.',

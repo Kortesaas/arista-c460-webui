@@ -119,7 +119,7 @@ function SnmpDialog({ settings, onClose, onSaved }: { settings: SnmpSettings; on
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Location" hint="Reported as sysLocation">
-              <Input value={form.location} maxLength={255} onChange={(e) => set('location', e.target.value)} placeholder="Stage left, truss 2" />
+              <Input value={form.location} maxLength={255} onChange={(e) => set('location', e.target.value)} placeholder="Building A, floor 2" />
             </Field>
             <Field label="Contact" hint="Reported as sysContact">
               <Input value={form.contact} maxLength={255} onChange={(e) => set('contact', e.target.value)} placeholder="noc@example.com" />

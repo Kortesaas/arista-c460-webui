@@ -20,7 +20,7 @@ func TestSSIDFeaturePreservation(t *testing.T) {
 	if err != nil || len(fc.deletes) != 1 || strings.Join(fc.deletes[0], "/") != "config/dot11k" || dig(fc.body, "config", "qbss-load") != false || dig(fc.body, "dot11r", "config", "dot11r") != true || dig(fc.body, "config", "wpa3-psk") != nil {
 		t.Fatal("unexpected plan", fc, err)
 	}
-	for _, name := range []string{"a", "Audio", "c460-feature-test", strings.Repeat("x", 32)} {
+	for _, name := range []string{"a", "Example", "c460-feature-test", strings.Repeat("x", 32)} {
 		if d := mobilityDomain(name); d < 1000 || d > 9999 || d != mobilityDomain(name) {
 			t.Fatal("mobility domain", name, d)
 		}
@@ -153,13 +153,13 @@ func TestNewFeatureAuthentication(t *testing.T) {
 }
 
 func TestMergeFeaturesFromBackup(t *testing.T) {
-	entry := map[string]any{"name": "Audio", "config": map[string]any{"name": "Audio", "dot11k": false}}
+	entry := map[string]any{"name": "Example", "config": map[string]any{"name": "Example", "dot11k": false}}
 	// Values as they come back from a JSON backup (numbers are float64).
-	if err := mergeFeatures(ssidFeatureDefs, entry, map[string]any{"rrm": true, "fastRoaming": true, "bandSteering": false}, "Audio"); err != nil {
+	if err := mergeFeatures(ssidFeatureDefs, entry, map[string]any{"rrm": true, "fastRoaming": true, "bandSteering": false}, "Example"); err != nil {
 		t.Fatal(err)
 	}
-	if dig(entry, "config", "dot11k") != true || dig(entry, "config", "name") != "Audio" || dig(entry, "dot11r", "config", "dot11r") != true ||
-		dig(entry, "dot11r", "config", "dot11r-domainid") != mobilityDomain("Audio") || dig(entry, "band-steering", "config", "band-steering") != false {
+	if dig(entry, "config", "dot11k") != true || dig(entry, "config", "name") != "Example" || dig(entry, "dot11r", "config", "dot11r") != true ||
+		dig(entry, "dot11r", "config", "dot11r-domainid") != mobilityDomain("Example") || dig(entry, "band-steering", "config", "band-steering") != false {
 		t.Fatal("merged entry", entry)
 	}
 	radio := map[string]any{"id": 1, "config": map[string]any{"channel": 36}}

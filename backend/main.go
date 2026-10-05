@@ -38,7 +38,7 @@ type Config struct {
 	PollSeconds int                     `json:"pollSeconds"`
 	AuthFile    string                  `json:"authFile"`
 	SiteName    string                  `json:"siteName"`  // optional label shown in the UI
-	VLANNames   map[string]string       `json:"vlanNames"` // optional, e.g. {"10": "Control"}
+	VLANNames   map[string]string       `json:"vlanNames"` // optional, e.g. {"10": "Management"}
 	GNMI        GNMIConfig              `json:"gnmi"`
 	SNMP        SNMPSettings            `json:"snmp"`
 	Metrics     MetricsSettings         `json:"metrics"`
