@@ -10,7 +10,12 @@
   Runs on the access point itself. No controller, no cloud, no subscription.
 </p>
 
+> [!TIP]
+> **Setting up a factory-fresh AP? Start with the [complete setup tutorial](docs/fresh-ap-setup.md).**
+> Follow the verified path from serial root access to a working local WebUI and API, including persistent SSH, disabling Arista cloud management, network configuration and reboot checks.
+
 <p align="center">
+  <a href="docs/fresh-ap-setup.md">Fresh AP tutorial</a> ·
   <a href="#set-up-a-new-access-point">Set up a new AP</a> ·
   <a href="#what-you-get">Features</a> ·
   <a href="#everyday-use">Everyday use</a> ·
@@ -57,7 +62,7 @@ The C-460 is normally managed from Arista's cloud. **arista-c460-webui** gives i
 
 ## Set up a new access point
 
-This takes about 20 minutes per AP. You do steps 1–4 once on each AP; step 5 is a single command from your computer.
+This takes about 20 minutes per AP. You do steps 1–4 once on each AP; step 5 is a single command from your computer. The [full tutorial](docs/fresh-ap-setup.md) walks through the verified procedure, including serial preparation and setup without a DHCP server.
 
 ### What you need
 
@@ -86,7 +91,7 @@ ssh config@192.168.1.40
 You now see the vendor CLI. All commands in steps 2–4 are typed there.
 
 > [!TIP]
-> On your computer, `deploy/unlock-commands.sh` prints all commands for steps 2–4 with your SSH key already filled in, ready to paste.
+> The [persistent root SSH instructions](docs/fresh-ap-setup.md#5-set-up-persistent-root-ssh) generate short commands with your public key filled in, ready to paste into the AP CLI.
 
 > [!TIP]
 > Give the AP a fixed address in your router (a DHCP reservation for its MAC). That keeps `http://<ap-address>/` the same after every restart. You can also set a static address later in the web interface.
@@ -125,11 +130,7 @@ The installer copies files over SSH as `root`, using your SSH key. On your compu
 cat ~/.ssh/id_ed25519.pub
 ```
 
-On the AP's command line, add it (paste your whole key line between the single quotes):
-
-```text
-radartool radio 0 params ";mkdir -p /root/.ssh; echo 'ssh-ed25519 AAAA…your key… you@laptop' >> /root/.ssh/authorized_keys; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys;"
-```
+Follow [tutorial step 5: persistent root SSH](docs/fresh-ap-setup.md#5-set-up-persistent-root-ssh). It adds your public key under `/opt/root-ssh/`, configures key-only root authentication in the persistent SSH template, and starts the existing daemon. It also clears the cached cloud destination. Keep the serial console available until SSH and the reboot checks pass.
 
 Back on your computer, this must now run without asking for a password:
 
