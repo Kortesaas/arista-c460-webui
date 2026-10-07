@@ -184,11 +184,12 @@ Match User root
     AuthorizedKeysFile /opt/root-ssh/authorized_keys
 Match all
 EOF
+. /opt/ap/configparser
+cfg_set ssh_enabled true /opt/openconfig/system.conf
+/etc/init.d/opensshd start
 /bin/sshd -t -f /opt/root-ssh/sshd_config.new -h /opt/ssh_host_rsa_key
 mv /opt/root-ssh/sshd_config.new /opt/sshd_config
-. /opt/ap/configparser
 cfg_set server_addr 127.0.0.1 /opt/sensor/discovery.conf
-cfg_set ssh_enabled true /opt/openconfig/system.conf
 /etc/init.d/opensshd restart
 echo ROOT_SSH_CONFIGURED
 '''.replace('PUBLIC_KEY', key)
@@ -211,6 +212,8 @@ ROOT_SSH_CONFIGURED
 ```
 
 This preparation runs once per fresh AP. If the backup already exists, the script stops rather than overwriting it. Once root SSH works, proceed to deployment instead of repeating this preparation.
+
+Starting the native SSH service before validating the new template also creates its temporary privilege-separation directory. This is needed on units where SSH was previously disabled.
 
 Read the AP's public host key and its current addresses through the trusted serial connection:
 
