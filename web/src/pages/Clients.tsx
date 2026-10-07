@@ -17,7 +17,7 @@ export function ClientsPage() {
   const clients = useMemo(() => {
     const q = query.trim().toLowerCase()
     return (state?.clients ?? []).filter(
-      (client) => (!ssid || client.ssid === ssid) && (!q || [client.mac, client.ipv4, client.hostname, client.os, client.ssid].some((value) => value.toLowerCase().includes(q))),
+      (client) => (!ssid || client.ssid === ssid) && (!q || [client.mac, client.ipv4, ...client.ipv6, client.hostname, client.os, client.ssid].some((value) => value.toLowerCase().includes(q))),
     )
   }, [state?.clients, query, ssid])
   if (!state) return <LoadingState />
@@ -140,10 +140,12 @@ export function ClientsPage() {
 }
 
 function ClientIdentity({ client }: { client: Client }) {
-  const name = client.hostname || client.ipv4 || client.mac
-  const detail = client.hostname || client.ipv4
-    ? [client.mac, client.hostname ? client.ipv4 : '', client.os].filter(Boolean).join(' · ')
-    : client.os || 'No IP address seen yet'
+  const address = client.ipv4 || client.ipv6.find((ip) => !/^fe[89ab]/i.test(ip)) || client.ipv6[0] || ''
+  const addressKind = !client.ipv4 && address ? (/^fe[89ab]/i.test(address) ? 'IPv6 link-local' : 'IPv6') : ''
+  const name = client.hostname || address || client.mac
+  const detail = client.hostname || address
+    ? [client.mac, client.hostname ? address : '', addressKind, !address ? 'No IP address observed' : '', client.os].filter(Boolean).join(' · ')
+    : ['No IP address observed', client.os].filter(Boolean).join(' · ')
   return <>
     <p className="truncate text-[13px] font-medium text-ink" title={name}>{name}</p>
     <p className="mono truncate text-[11px] text-faint" title={detail}>{detail}</p>

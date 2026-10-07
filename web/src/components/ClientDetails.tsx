@@ -62,7 +62,7 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
         <KeyValue
           items={[
             { label: 'IPv4', value: client.ipv4 || '—', mono: true },
-            { label: 'Address source', value: !client.ipv4 ? 'Unknown' : client.ipv4Source === 'arp' ? 'AP ARP cache' : 'AP telemetry' },
+            { label: 'Address source', value: client.ipv4 ? (client.ipv4Source === 'arp' ? 'AP ARP cache' : 'AP telemetry') : client.ipv6.length ? 'AP telemetry' : 'Unknown' },
             { label: 'IPv6', value: client.ipv6.join(', ') || '—', mono: true },
             { label: 'Band', value: client.band ? `${client.band} GHz` : '—' },
             { label: 'VLAN', value: client.vlan ?? 'Native / untagged' },
@@ -81,6 +81,12 @@ export function ClientDialog({ client, onClose }: { client: Client; onClose: () 
           ]}
         />
       </div>
+      {!client.ipv4 && (
+        <p className="mt-3 text-[12px] leading-5 text-muted">
+          No IPv4 address has been observed. For automatic IPv4 addressing, this network needs an upstream router or DHCP server; the AP does not assign client addresses.
+          {client.ipv6.length > 0 && client.ipv6.every((ip) => /^fe[89ab]/i.test(ip)) && ' The IPv6 link-local address is valid only on the local network.'}
+        </p>
+      )}
       <div className="mt-4 border-t border-line pt-3">
         <SectionLabel className="mb-2">Signal, last 2 hours</SectionLabel>
         <ClientSignal mac={client.mac} sampledAt={sampledAt} />

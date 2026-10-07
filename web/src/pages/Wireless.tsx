@@ -293,7 +293,7 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
     vlan: ssid ? ssid.vlan : null,
     isolation: ssid?.isolation ?? false,
   }))
-  const [vlanMode, setVlanMode] = useState<'tagged' | 'untagged'>(ssid && ssid.vlan === null ? 'untagged' : ssid ? 'tagged' : 'tagged')
+  const [vlanMode, setVlanMode] = useState<'tagged' | 'untagged'>(ssid?.vlan == null ? 'untagged' : 'tagged')
   const [vlanText, setVlanText] = useState(ssid?.vlan ? String(ssid.vlan) : '')
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -403,21 +403,21 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
               value={vlanMode}
               onChange={setVlanMode}
               options={[
-                { value: 'tagged', label: 'Tagged' },
                 { value: 'untagged', label: 'Untagged' },
+                { value: 'tagged', label: 'Tagged' },
               ]}
             />
-            <Input
+            {vlanMode === 'tagged' && <Input
               type="number"
               min={1}
               max={4094}
               inputMode="numeric"
-              value={vlanMode === 'tagged' ? vlanText : ''}
-              disabled={vlanMode === 'untagged'}
+              value={vlanText}
+              aria-label="VLAN ID"
               onChange={(event) => setVlanText(event.target.value)}
               placeholder="ID"
               className="w-24"
-            />
+            />}
           </div>
         </Field>
 
