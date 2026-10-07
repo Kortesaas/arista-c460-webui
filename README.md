@@ -131,11 +131,13 @@ On the AP's command line, add it (paste your whole key line between the single q
 radartool radio 0 params ";mkdir -p /root/.ssh; echo 'ssh-ed25519 AAAA…your key… you@laptop' >> /root/.ssh/authorized_keys; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys;"
 ```
 
-Back on your computer, this must now print `root`, without asking for a password:
+Back on your computer, this must now run without asking for a password:
 
 ```bash
 ssh root@192.168.1.40 whoami
 ```
+
+The firmware can print `config` here because `root` and `config` share UID 0.
 
 ### 5. Install the web interface
 
@@ -149,7 +151,7 @@ The script:
 
 1. builds the web interface and checks that the AP is a C-460 with local configuration enabled,
 2. **creates a private API user** for the web interface (it signs in once with the factory API login and replaces it, so that login stops working afterwards),
-3. sets the AP's hostname and **regulatory country**. Changing the country can make the AP restart its radios or reboot once; just run the same command again afterwards,
+3. sets the AP's hostname and **regulatory country**, enables the native SSH service for future updates, and initializes the three radio controls if none are configured. Existing radio settings are preserved. Changing the country can make the AP restart its radios or reboot once; just run the same command again afterwards,
 4. asks you for the **web interface login**: username (default `config`) and a password of your choice,
 5. installs and starts the service so it also starts after every reboot, and
 6. runs the firmware's **boot-time trust check**, so you know a restart will not wipe the installation ([why this matters](#the-firmwares-boot-time-trust-check)).
@@ -160,6 +162,14 @@ run the same command again. Its replacement API credentials are saved privately
 in `/opt/c460-webui/config.json.bootstrap` before the AP is changed, then moved
 into `config.json` after verification. Keep that recovery file if setup fails;
 it is removed automatically after a successful run.
+
+For a direct Ethernet connection without a DHCP server, deployment also works
+over the AP's IPv6 link-local address. Read it through root access with
+`ip -6 addr show br0`, then use `deploy/deploy.sh 'fe80::…%en20'` with the same
+options. Replace `en20` with your computer's connected Ethernet interface.
+For browser access during setup, forward port 80 with
+`ssh -N -L 8082:127.0.0.1:80 'root@fe80::…%en20'` and open
+`http://127.0.0.1:8082/`. Configure the permanent IPv4 address under **Network**.
 
 ### 6. First visit
 

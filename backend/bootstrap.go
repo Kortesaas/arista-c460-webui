@@ -17,7 +17,9 @@ import (
 	"time"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 const bootstrapAPIUser = "c460webui"
@@ -144,11 +146,16 @@ func bootstrapWithAgent(opts bootstrapOptions, mac string, g bootstrapAgent) err
 	provPath := &gpb.Path{Origin: g.apPath().Origin, Elem: []*gpb.PathElem{elem("provision-aps"), elem("provision-ap", "mac", mac)}}
 	provisions := &gpb.Path{Origin: provPath.Origin, Elem: []*gpb.PathElem{elem("provision-aps")}}
 	current, err := g.getAs(ctx, loginUser, loginPass, provisions)
-	if err != nil && pending {
+	if err != nil && status.Code(err) != codes.NotFound && pending {
 		// An interrupted run may have saved the replacement credentials before
 		// the AP accepted them. Only that recovery state permits factory login.
 		loginUser, loginPass = opts.loginUser, opts.loginPass
 		current, err = g.getAs(ctx, loginUser, loginPass, provisions)
+	}
+	// Factory-fresh firmware returns NotFound until the first AP is provisioned.
+	// Authentication and transport failures must still stop setup.
+	if status.Code(err) == codes.NotFound {
+		current, err = map[string]any{}, nil
 	}
 	if err != nil {
 		return fmt.Errorf("sign-in to the OpenConfig agent as %q failed: %w", loginUser, err)
@@ -172,6 +179,11 @@ func bootstrapWithAgent(opts bootstrapOptions, mac string, g bootstrapAgent) err
 	if country == "" {
 		return errors.New("this AP is not provisioned yet: pass the regulatory country, e.g. --country DE")
 	}
+	currentAP, err := g.getAs(ctx, loginUser, loginPass, g.apPath())
+	if err != nil && status.Code(err) != codes.NotFound {
+		return fmt.Errorf("read AP configuration before setup: %w", err)
+	}
+	initializeRadios := len(items(normalize(currentAP), "radios", "radio")) == 0
 	if !saved && !pending {
 		token, err := newToken()
 		if err != nil {
@@ -202,9 +214,15 @@ func bootstrapWithAgent(opts bootstrapOptions, mac string, g bootstrapAgent) err
 	apBody := map[string]any{
 		"hostname": hostname,
 		"config":   map[string]any{"hostname": hostname},
-		"system": map[string]any{"aaa": map[string]any{"authentication": map[string]any{"users": map[string]any{"user": []any{
-			map[string]any{"username": apiUser, "config": map[string]any{"username": apiUser, "password": apiPass}},
-		}}}}},
+		"system": map[string]any{
+			"ssh-server": map[string]any{"config": map[string]any{"enable": true}},
+			"aaa": map[string]any{"authentication": map[string]any{"users": map[string]any{"user": []any{
+				map[string]any{"username": apiUser, "config": map[string]any{"username": apiUser, "password": apiPass}},
+			}}}},
+		},
+	}
+	if initializeRadios {
+		apBody["radios"] = map[string]any{"radio": bootstrapRadios()}
 	}
 	var setErr error
 	for attempt := 0; attempt < 6; attempt++ { // provisioning can take a moment to create the AP entry
@@ -241,4 +259,30 @@ func bootstrapWithAgent(opts bootstrapOptions, mac string, g bootstrapAgent) err
 	}
 	fmt.Printf("OpenConfig API user %q is ready and saved in %s\n", apiUser, opts.configPath)
 	return nil
+}
+
+// These are the C-460's three configurable OpenConfig radios. Their ids differ
+// from the native wifi interface numbers; the fourth radio is for scanning.
+// Initialize only an empty configuration so later runs preserve user settings.
+func bootstrapRadios() []any {
+	radios := []any{}
+	for _, r := range []struct {
+		id                    int
+		frequency             string
+		channel, width, power int
+	}{
+		{0, "FREQ_2GHZ", 1, 20, 20},
+		{1, "FREQ_5GHZ", 36, 80, 23},
+		{2, "FREQ_6GHZ", 5, 80, 23},
+	} {
+		radios = append(radios, map[string]any{
+			"id": r.id, "operating-frequency": r.frequency,
+			"config": map[string]any{
+				"id": r.id, "operating-frequency": r.frequency, "enabled": true,
+				"channel": r.channel, "channel-width": r.width, "transmit-power": r.power,
+				"dca": false, "dtp": false, "scanning": false,
+			},
+		})
+	}
+	return radios
 }

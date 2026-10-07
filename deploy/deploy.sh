@@ -28,6 +28,8 @@ usage() { sed -n '2,/^set -euo/{/^set -euo/!p;}' "$0" | sed 's/^# \{0,1\}//'; ex
 [ $# -ge 1 ] || usage
 case "$1" in -h | --help) usage 0 ;; esac
 HOST=$1
+HTTP_URL="http://$HOST"
+if [[ "$HOST" == *:* ]]; then HTTP_URL="http://[${HOST//%/%25}]"; fi
 shift
 GNMI_CREDS="" BOOTSTRAP=0 COUNTRY="" SITE_NAME="" VLAN_NAMES="" SET_PASSWORD=0 BUILD=1 UNINSTALL=0 CHECK_ONLY=0 UI_USER=${C460_UI_USERNAME:-}
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
@@ -174,10 +176,10 @@ fi
 
 step "Starting service"
 ap ". /etc/profile >/dev/null 2>&1; $INIT stop >/dev/null 2>&1; $INIT start; sleep 2; pidof c460-webui >/dev/null && echo running || echo NOT running"
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$HOST/api/session" || true)
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$HTTP_URL/api/session" || true)
 if [ "$code" != 200 ]; then
-	echo "The service did not answer on http://$HOST/ (HTTP $code). Check: ssh root@$HOST logread | grep c460-webui" >&2
+	echo "The service did not answer on $HTTP_URL/ (HTTP $code). Check: ssh root@$HOST logread | grep c460-webui" >&2
 	exit 1
 fi
 trust_check || exit 1
-step "Done: http://$HOST/"
+step "Done: $HTTP_URL/"

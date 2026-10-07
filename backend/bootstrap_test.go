@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const bootstrapTestMAC = "02:00:00:46:00:01"
@@ -23,6 +25,10 @@ type testBootstrapAgent struct {
 	unready      bool
 	factoryReads int
 	writes       int
+	missingTree  bool
+	readError    error
+	radios       []any
+	radioWrites  int
 }
 
 func (g *testBootstrapAgent) apPath(rest ...*gpb.PathElem) *gpb.Path {
@@ -38,13 +44,19 @@ func (g *testBootstrapAgent) getAs(_ context.Context, user, pass string, path *g
 		return nil, errors.New("unauthenticated")
 	}
 	if path.Elem[0].Name == "provision-aps" {
+		if g.readError != nil {
+			return nil, g.readError
+		}
+		if g.missingTree && g.country == "" {
+			return nil, status.Error(codes.NotFound, "provision-aps not found")
+		}
 		return map[string]any{"provision-ap": []any{map[string]any{"mac": bootstrapTestMAC, "config": map[string]any{"country-code": g.country}}}}, nil
 	}
-	if g.unready {
+	if g.unready && g.user != "" {
 		g.unready = false
 		return nil, errors.New("agent restarting")
 	}
-	return map[string]any{"hostname": "02-00-00-46-00-01"}, nil
+	return map[string]any{"hostname": "02-00-00-46-00-01", "radios": map[string]any{"radio": g.radios}}, nil
 }
 
 func (g *testBootstrapAgent) setAs(_ context.Context, _, _ string, path *gpb.Path, value any) error {
@@ -64,6 +76,13 @@ func (g *testBootstrapAgent) setAs(_ context.Context, _, _ string, path *gpb.Pat
 		}
 		return nil
 	}
+	if dig(body, "system", "ssh-server", "config", "enable") != true {
+		g.t.Fatal("bootstrap must enable the native SSH service for deployment and future updates")
+	}
+	if radios, ok := dig(body, "radios", "radio").([]any); ok {
+		g.radios = radios
+		g.radioWrites++
+	}
 	users := dig(body, "system", "aaa", "authentication", "users", "user").([]any)
 	config := users[0].(map[string]any)["config"].(map[string]any)
 	g.user, g.pass = config["username"].(string), config["password"].(string)
@@ -75,13 +94,13 @@ func (g *testBootstrapAgent) setAs(_ context.Context, _, _ string, path *gpb.Pat
 }
 
 func TestBootstrapFreshAndInterruptedSetup(t *testing.T) {
-	for _, scenario := range []string{"fresh", "country-restart", "lost-response", "verification-restart"} {
+	for _, scenario := range []string{"fresh", "factory-missing-tree", "country-restart", "lost-response", "verification-restart"} {
 		t.Run(scenario, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.json")
 			if err := os.WriteFile(path, []byte(`{"siteName":"Keep this","pollSeconds":10,"custom":{"keep":true}}`), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			g := &testBootstrapAgent{t: t, configPath: path, interrupt: scenario == "country-restart", lostResponse: scenario == "lost-response", unready: scenario == "verification-restart"}
+			g := &testBootstrapAgent{t: t, configPath: path, missingTree: scenario == "factory-missing-tree", interrupt: scenario == "country-restart", lostResponse: scenario == "lost-response", unready: scenario == "verification-restart"}
 			opts := bootstrapOptions{configPath: path, country: "de", loginUser: "admin", loginPass: "admin"}
 			err := bootstrapWithAgent(opts, bootstrapTestMAC, g)
 			if scenario == "country-restart" || scenario == "verification-restart" {
@@ -101,6 +120,9 @@ func TestBootstrapFreshAndInterruptedSetup(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if len(g.radios) != 3 || g.radioWrites != 1 {
+				t.Fatal("fresh setup must initialize the three configurable radios once")
+			}
 			raw, _ := os.ReadFile(path)
 			var cfg map[string]any
 			if json.Unmarshal(raw, &cfg) != nil || cfg["siteName"] != "Keep this" || cfg["pollSeconds"] != float64(10) || dig(cfg, "custom", "keep") != true || dig(cfg, "gnmi", "password") != g.pass {
@@ -114,8 +136,35 @@ func TestBootstrapFreshAndInterruptedSetup(t *testing.T) {
 				t.Fatal("successful setup must remove recovery file")
 			}
 			factoryReads, password := g.factoryReads, g.pass
-			if err := bootstrapWithAgent(opts, bootstrapTestMAC, g); err != nil || g.factoryReads != factoryReads || g.pass != password {
+			if err := bootstrapWithAgent(opts, bootstrapTestMAC, g); err != nil || g.factoryReads != factoryReads || g.pass != password || g.radioWrites != 1 {
 				t.Fatal("a configured AP must reuse its API login without the factory login", err)
+			}
+		})
+	}
+}
+
+func TestBootstrapPreservesConfiguredRadios(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	g := &testBootstrapAgent{t: t, configPath: path, country: "DE", radios: []any{
+		map[string]any{"id": 1, "operating-frequency": "FREQ_5GHZ", "config": map[string]any{"enabled": false, "channel": 100, "transmit-power": 15}},
+	}}
+	opts := bootstrapOptions{configPath: path, country: "DE", loginUser: "admin", loginPass: "admin"}
+	if err := bootstrapWithAgent(opts, bootstrapTestMAC, g); err != nil || g.radioWrites != 0 || len(g.radios) != 1 {
+		t.Fatal("bootstrap must preserve existing radio configuration", err)
+	}
+}
+
+func TestBootstrapStopsOnAgentReadFailure(t *testing.T) {
+	for _, code := range []codes.Code{codes.Unauthenticated, codes.PermissionDenied, codes.Unavailable} {
+		t.Run(code.String(), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.json")
+			g := &testBootstrapAgent{t: t, configPath: path, readError: status.Error(code, "agent read failed")}
+			opts := bootstrapOptions{configPath: path, country: "DE", loginUser: "admin", loginPass: "admin"}
+			if err := bootstrapWithAgent(opts, bootstrapTestMAC, g); err == nil || g.writes != 0 {
+				t.Fatal("API read failure must stop bootstrap before changing the AP")
+			}
+			if _, err := os.Stat(path + ".bootstrap"); !os.IsNotExist(err) {
+				t.Fatal("failed sign-in must not create recovery credentials")
 			}
 		})
 	}
