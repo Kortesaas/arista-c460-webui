@@ -13,7 +13,8 @@ import { BandChip, Dot, VlanChip } from '@/components/status'
 import { api } from '@/api'
 import { useApp } from '@/stores/app'
 import { changeTarget, useStaging } from '@/stores/staging'
-import type { Band, Ssid, SsidInput, StagedChange } from '@/types'
+import type { ApState, Band, Ssid, SsidInput, StagedChange } from '@/types'
+import { appliedSsid, ssidBandStatus } from '@/utils/ssid-status'
 import { cn } from '@/ui/cn'
 import { Badge, Button, Dialog, DialogActions, EmptyState, Field, IconButton, Input, Panel, Segmented, Select, Spinner, Toggle } from '@/ui/kit'
 import { formatBytes, opModeLabel, opModeShort, plural } from '@/utils/format'
@@ -46,22 +47,34 @@ function MixedBadge({ ssid }: { ssid: Ssid }) {
   )
 }
 
+function SsidBands({ ssid, state }: { ssid: Ssid; state: ApState }) {
+  return <div className="flex flex-wrap gap-1">
+    {ssid.bands.map((band) => {
+      const status = ssidBandStatus(ssid, band, state)
+      const label = `${ssid.name}: ${band} GHz ${status}`
+      return <span key={band} title={label} aria-label={label} role={status === 'starting' ? 'status' : undefined}>
+        <BandChip band={band} loading={status === 'starting'} muted={status !== 'broadcasting' && status !== 'starting'} />
+      </span>
+    })}
+  </div>
+}
+
 export function WirelessPage() {
   const state = useApp((store) => store.state)
+  const applications = useApp((store) => store.ssidApplications)
   const staged = useStaging((s) => s.changes)
+  const batchBusy = useStaging((s) => s.busy)
   const change = useApp((store) => store.change)
   const [editing, setEditing] = useState<{ ssid: Ssid | null; draft?: SsidInput } | null>(null)
-  const [applying, setApplying] = useState('')
+  const applying = applications.some((application) => application.pending) || batchBusy
   const saving = useRef(false)
   const save = async (input: SsidInput) => {
     if (!editing || saving.current) return
     const { ssid } = editing
     saving.current = true
-    setApplying(`${ssid ? 'Saving' : 'Creating'} ${input.name}…`)
     setEditing(null)
-    const ok = await change(ssid ? `Saved ${input.name}` : `Created ${input.name}`, () => (ssid ? api.updateSsid(ssid.name, input) : api.createSsid(input)))
+    const ok = await change(ssid ? `Saved ${input.name}` : `Created ${input.name}`, () => (ssid ? api.updateSsid(ssid.name, input) : api.createSsid(input)), [{ previousName: ssid?.name, input }])
     saving.current = false
-    setApplying('')
     if (!ok) setEditing({ ssid, draft: input })
   }
   // Links such as /wireless?edit=Office (from the Overview) open the editor.
@@ -81,10 +94,22 @@ export function WirelessPage() {
   const [traffic, setTraffic] = useState<string | null>(null)
   const [access, setAccess] = useState<string | null>(null)
   if (!state) return <LoadingState />
+  const ssids = state.ssids
+    .filter((ssid) => !applications.some((application) => application.previousName === ssid.name && application.ssid.name !== ssid.name))
+    .map((ssid) => {
+      const application = applications.find((application) => application.ssid.name === ssid.name)
+      return application ? appliedSsid(state, application) ?? application.ssid : ssid
+    })
+  for (const application of applications) {
+    if (!ssids.some((ssid) => ssid.name === application.ssid.name)) ssids.push(appliedSsid(state, application) ?? application.ssid)
+  }
+  const progressFor = (ssid: Ssid) => applications.some((application) => application.ssid.name === ssid.name)
+    ? 'Applying'
+    : ssid.bands.some((band) => ssidBandStatus(ssid, band, state) === 'starting') ? 'Starting' : ''
   const pendingFor = (name: string) => staged.find((c) => changeTarget(c) === `ssid:${name}`)
-  const stagedNew = staged.filter((c): c is Extract<StagedChange, { kind: 'ssid-create' }> => c.kind === 'ssid-create')
+  const stagedNew = staged.filter((c): c is Extract<StagedChange, { kind: 'ssid-create' }> => c.kind === 'ssid-create' && !ssids.some((ssid) => ssid.name === c.ssid.name))
   const actions = (ssid: Ssid) => (
-    <div className="flex flex-wrap justify-end gap-0.5">
+    <fieldset disabled={applying || applications.some((application) => application.ssid.name === ssid.name)} className="flex flex-wrap justify-end gap-0.5 disabled:opacity-50">
       <IconButton label={`Bandwidth and QoS for ${ssid.name}`} onClick={() => setTraffic(ssid.name)}><Gauge size={14} /></IconButton>
       <IconButton label={`Client access for ${ssid.name}`} onClick={() => setAccess(ssid.name)}><ShieldCheck size={14} /></IconButton>
       <IconButton label={`Join code for ${ssid.name}`} write onClick={() => setJoining(ssid.name)}>
@@ -102,7 +127,7 @@ export function WirelessPage() {
       <IconButton label={`Delete ${ssid.name}`} write onClick={() => setDeleting(ssid)} className="hover:text-danger">
         <Trash2 size={14} />
       </IconButton>
-    </div>
+    </fieldset>
   )
 
   return (
@@ -116,13 +141,7 @@ export function WirelessPage() {
         </Button>
       }
     >
-      {applying && (
-        <div role="status" className="mb-3 flex items-center gap-2 rounded-lg border border-accent bg-accent-soft p-3 text-[13px] text-ink">
-          <Spinner size={14} />
-          <p>{applying} Wi-Fi may restart while the AP applies these settings.</p>
-        </div>
-      )}
-      {state.ssids.length === 0 ? (
+      {ssids.length === 0 && stagedNew.length === 0 ? (
         <Panel>
           <EmptyState
             icon={<Wifi size={28} />}
@@ -134,13 +153,14 @@ export function WirelessPage() {
       ) : (
         <>
         <ul className="space-y-2 md:hidden">
-          {state.ssids.map((ssid) => {
+          {ssids.map((ssid) => {
             const pending = pendingFor(ssid.name)
+            const progress = progressFor(ssid)
             const schedule = scheduleSummary(state.schedules?.[ssid.name], state.timeZone)
             return (
               <li key={ssid.name} className="rounded-lg border border-line bg-surface p-3">
                 <div className="flex items-start gap-2">
-                  <Dot tone={ssid.enabled ? 'ok' : 'neutral'} className="mt-1.5" />
+                  {progress ? <span role="status" aria-label={`${progress} ${ssid.name}`} className="mt-1 shrink-0 text-accent-text"><Spinner size={14} /></span> : <Dot tone={ssid.bssids.length ? 'ok' : 'neutral'} className="mt-1.5" />}
                   <div className="min-w-0 flex-1">
                     <p className="break-words text-[14px] font-semibold text-ink">{ssid.name}</p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
@@ -153,13 +173,12 @@ export function WirelessPage() {
                   <VlanChip vlan={ssid.vlan} />
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1">
-                  {ssid.bands.map((band) => (
-                    <BandChip key={band} band={band} />
-                  ))}
+                  <SsidBands ssid={ssid} state={state} />
+                  {progress && <Badge tone="accent">{progress.toLowerCase()}</Badge>}
                   {!ssid.enabled && <Badge>disabled</Badge>}
                   {ssid.hidden && <Badge>hidden</Badge>}
                   {ssid.isolation && <Badge tone="accent">isolated</Badge>}
-                  {pending && <Badge tone="accent">{pending.kind === 'ssid-delete' ? 'pending delete' : 'pending change'}</Badge>}
+                  {pending && !batchBusy && <Badge tone="accent">{pending.kind === 'ssid-delete' ? 'pending delete' : 'pending change'}</Badge>}
                 </div>
                 {schedule && (
                   <button type="button" onClick={() => setScheduling(ssid.name)} className="mt-1.5 flex items-center gap-1 text-[11px] text-muted hover:text-accent-text">
@@ -201,19 +220,21 @@ export function WirelessPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {state.ssids.map((ssid) => {
+              {ssids.map((ssid) => {
                 const pending = pendingFor(ssid.name)
+                const progress = progressFor(ssid)
                 const schedule = scheduleSummary(state.schedules?.[ssid.name], state.timeZone)
                 return (
                 <tr key={ssid.name} className="hover:bg-surface-2/50">
                   <td className="px-3 py-2.5">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <Dot tone={ssid.enabled ? 'ok' : 'neutral'} />
+                      {progress ? <span role="status" aria-label={`${progress} ${ssid.name}`} className="shrink-0 text-accent-text"><Spinner size={14} /></span> : <Dot tone={ssid.bssids.length ? 'ok' : 'neutral'} />}
                       <span className="min-w-0 break-words font-medium text-ink">{ssid.name}</span>
+                      {progress && <Badge tone="accent">{progress.toLowerCase()}</Badge>}
                       {!ssid.enabled && <Badge>disabled</Badge>}
                       {ssid.hidden && <Badge>hidden</Badge>}
                       {ssid.isolation && <Badge tone="accent">isolated</Badge>}
-                      {pending && <Badge tone="accent">{pending.kind === 'ssid-delete' ? 'pending delete' : 'pending change'}</Badge>}
+                      {pending && !batchBusy && <Badge tone="accent">{pending.kind === 'ssid-delete' ? 'pending delete' : 'pending change'}</Badge>}
                     </div>
                     {schedule && (
                       <button type="button" onClick={() => setScheduling(ssid.name)} className="ml-4 mt-0.5 flex items-center gap-1 text-[11px] text-muted hover:text-accent-text">
@@ -228,17 +249,7 @@ export function WirelessPage() {
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
-                    <div className="flex gap-1">
-                      {BANDS.map((band) => {
-                        const configured = ssid.bands.includes(band)
-                        const live = ssid.bssids.some((bssid) => bssid.band === band)
-                        return configured ? (
-                          <span key={band} title={live ? `Broadcasting on ${band} GHz` : `Configured for ${band} GHz but not broadcasting`} className={cn(!live && 'opacity-50')}>
-                            <BandChip band={band} />
-                          </span>
-                        ) : null
-                      })}
-                    </div>
+                    <SsidBands ssid={ssid} state={state} />
                   </td>
                   <td className="px-3 py-2.5">
                     <VlanChip vlan={ssid.vlan} />
@@ -293,7 +304,7 @@ export function WirelessPage() {
       {access && <ClientAccessDialog name={access} onClose={() => setAccess(null)} />}
       {joining && <JoinCodeDialog name={joining} onClose={() => setJoining(null)} />}
       {scheduling && <ScheduleDialog name={scheduling} onClose={() => setScheduling(null)} />}
-      {editing && <SsidDialog ssid={editing.ssid} draft={editing.draft} existing={state.ssids.map((ssid) => ssid.name)} onSave={(input) => void save(input)} onClose={() => setEditing(null)} />}
+      {editing && <SsidDialog ssid={editing.ssid} draft={editing.draft} existing={ssids.map((ssid) => ssid.name)} onSave={(input) => void save(input)} onClose={() => setEditing(null)} />}
       {deleting && <DeleteDialog ssid={deleting} onClose={() => setDeleting(null)} />}
     </Page>
   )

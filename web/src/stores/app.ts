@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api, ApiError } from '@/api'
-import type { ApState, Role } from '@/types'
+import type { ApState, Role, SsidInput } from '@/types'
+import { appliedSsid, type SsidApplication } from '@/utils/ssid-status'
 
 export type Connection = 'connecting' | 'live' | 'reconnecting' | 'offline'
 export type Auth = 'unknown' | 'signed-out' | 'signed-in'
@@ -23,6 +24,7 @@ interface AppStore {
   error: string | null
   now: number
   toasts: Toast[]
+  ssidApplications: SsidApplication[]
   init: () => () => void
   refresh: () => Promise<void>
   signIn: (username: string, password: string) => Promise<void>
@@ -30,7 +32,7 @@ interface AppStore {
   toast: (text: string, tone?: Toast['tone']) => void
   setViewer: (viewer: string) => void
   /** Runs a configuration change, reports the outcome and refreshes state. */
-  change: (label: string, run: () => Promise<unknown>) => Promise<boolean>
+  change: (label: string, run: () => Promise<unknown>, ssids?: { previousName?: string; input: SsidInput }[]) => Promise<boolean>
 }
 
 let toastId = 0
@@ -49,6 +51,7 @@ export const useApp = create<AppStore>((set, get) => ({
   error: null,
   now: Date.now(),
   toasts: [],
+  ssidApplications: [],
 
   init: () => {
     let stopped = false
@@ -116,11 +119,16 @@ export const useApp = create<AppStore>((set, get) => ({
           previous?.managementError === state.managementError &&
           JSON.stringify(previous?.management) === JSON.stringify(state.management) &&
           JSON.stringify(previous?.radios.map((r) => r.wifi7)) === JSON.stringify(state.radios.map((r) => r.wifi7))
-        set({ state: same ? previous : state, connection: state.error ? 'reconnecting' : 'live', error: state.error ?? null })
+        const applications = get().ssidApplications
+        const remaining = applications.filter((application) => application.pending || !appliedSsid(state, application))
+        set({
+          state: same ? previous : state, connection: state.error ? 'reconnecting' : 'live', error: state.error ?? null,
+          ssidApplications: remaining.length === applications.length ? applications : remaining,
+        })
       } catch (error) {
         if (generation !== sessionGeneration) return
         if (error instanceof ApiError && error.status === 401) {
-          set({ auth: 'signed-out', state: null })
+          set({ auth: 'signed-out', state: null, ssidApplications: [] })
           return
         }
         set({ connection: get().state ? 'reconnecting' : 'offline', error: error instanceof Error ? error.message : String(error) })
@@ -146,7 +154,7 @@ export const useApp = create<AppStore>((set, get) => ({
   signOut: async () => {
     sessionGeneration++
     stateRequest = null
-    set({ auth: 'signed-out', state: null, username: '', role: '', viewer: '' })
+    set({ auth: 'signed-out', state: null, username: '', role: '', viewer: '', ssidApplications: [] })
     await api.logout().catch(() => undefined)
   },
 
@@ -158,15 +166,33 @@ export const useApp = create<AppStore>((set, get) => ({
     setTimeout(() => set((store) => ({ toasts: store.toasts.filter((toast) => toast.id !== id) })), tone === 'danger' ? 9000 : 5000)
   },
 
-  change: async (label, run) => {
+  change: async (label, run, ssids = []) => {
+    const applications: SsidApplication[] = ssids.map(({ previousName, input }) => ({
+      previousName: previousName ?? input.name,
+      sampleAt: get().state?.generatedAt,
+      pending: true,
+      ssid: {
+        name: input.name, enabled: input.enabled, hidden: input.hidden, opmode: input.opmode,
+        bands: input.bands, vlan: input.vlan, isolation: input.isolation,
+        hasPassword: Boolean(input.password) || Boolean(get().state?.ssids.find((ssid) => ssid.name === previousName)?.hasPassword),
+        mfp: false, bssids: [], clients: 0, rxBytes: 0, txBytes: 0,
+      },
+    }))
+    const tracked = new Set(applications.map((application) => application.ssid))
+    if (applications.length) set((store) => ({ ssidApplications: [...store.ssidApplications, ...applications] }))
     try {
       await run()
+      if (applications.length) {
+        set((store) => ({ ssidApplications: store.ssidApplications.map((application) => tracked.has(application.ssid) ? { ...application, pending: false } : application) }))
+        void get().refresh()
+      }
       get().toast(`${label} — applying. Wi-Fi on this AP restarts for a few seconds.`, 'ok')
       setTimeout(() => void get().refresh(), 1500)
       setTimeout(() => void get().refresh(), 6000)
       return true
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) set({ auth: 'signed-out', state: null })
+      set((store) => ({ ssidApplications: store.ssidApplications.filter((application) => !tracked.has(application.ssid)) }))
+      if (error instanceof ApiError && error.status === 401) set({ auth: 'signed-out', state: null, ssidApplications: [] })
       get().toast(`${label} failed: ${error instanceof Error ? error.message : String(error)}`, 'danger')
       return false
     }

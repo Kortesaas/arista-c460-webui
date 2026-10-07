@@ -160,7 +160,7 @@ Complete network PUT example (4 Mbps shared download, 1 Mbps shared upload):
 ```
 
 Rates use decimal Kbps from the wireless client's perspective. Each direction
-accepts null for unlimited, or an integer from 32 to 1,000,000. The SSID cap is
+accepts null for unlimited, or an integer from 32 to 10,000,000. The SSID cap is
 shared across its bands and devices. perClient gives each associated device a
 separate cap; new associations receive it on reconciliation (normally within
 five seconds after AP telemetry sees the client). The clients map accepts up

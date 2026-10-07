@@ -47,11 +47,20 @@ func TestTrafficValidationAndOwnership(t *testing.T) {
 	if *n.Bandwidth.DownloadKbps != 4000 || *n.Clients["02:00:00:46:00:01"].UploadKbps != 32 || n.QoS.Mode != "fixed" {
 		t.Fatal("normalization retained caller-owned values")
 	}
-	for _, rate := range []int{-1, 0, 31, 1000001} {
+	for _, rate := range []int{-1, 0, 31, 10000001} {
 		p := trafficTestPolicy()
 		p.Bandwidth.UploadKbps = &rate
 		if _, e := normalizeTrafficPolicy(p); e == nil {
 			t.Fatal("invalid rate accepted", rate)
+		}
+	}
+	for _, rate := range []int{32, 1000001, 2500000, 5000000, 10000000} {
+		p := defaultTrafficPolicy()
+		p.Bandwidth = TrafficLimits{UploadKbps: &rate, DownloadKbps: &rate}
+		p.PerClient = p.Bandwidth
+		p.Clients["02:00:00:46:00:01"] = p.Bandwidth
+		if _, e := normalizeTrafficPolicy(p); e != nil {
+			t.Fatal("valid SSID and device rate rejected", rate, e)
 		}
 	}
 	for _, mac := range []string{"garbage", "01:00:00:00:00:01", "00:00:00:00:00:00", "02:00:00:00:00:00:00:01"} {
@@ -221,7 +230,7 @@ func TestTrafficAPIRequiresCompleteSettingsAndPermissions(t *testing.T) {
 	}
 	schema := requestSchema("PUT /api/ssids/{name}/traffic")
 	raw, _ := json.Marshal(schema)
-	if !strings.Contains(string(raw), `"maximum":1000000`) || !strings.Contains(string(raw), `"maxProperties":128`) {
+	if !strings.Contains(string(raw), `"maximum":10000000`) || !strings.Contains(string(raw), `"maxProperties":128`) {
 		t.Fatal("limits absent from OpenAPI")
 	}
 	if trafficQoSFlags(TrafficQoS{Priority: "voice", Mode: "fixed", Mapping: "dscp", MarkDSCP: true}) != 79 || trafficQoSFlags(TrafficQoS{Priority: "voice", Mode: "ceiling", Mapping: "dscp"}) != 11 {

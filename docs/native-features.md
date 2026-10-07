@@ -55,9 +55,16 @@ Wireless networks → Bandwidth and QoS and Clients → View → Bandwidth limit
 expose a shared SSID upload/download cap, a default cap for each connected
 device, and explicit Wi-Fi MAC overrides. The API provides GET/PUT traffic and
 PUT/DELETE client overrides, with monitor/configure token permissions and
-complete OpenAPI schemas. Rates use decimal Kbps (32–1,000,000); blank/null
+complete OpenAPI schemas. Rates use decimal Kbps (32–10,000,000); blank/null
 means unlimited. Overrides replace both default directions; aggregate caps
 still apply. Eight native IFB queue pairs are available on this device.
+
+The earlier 1 Gbps ceiling was software validation. On firmware 18.2.0-32,
+isolated native TBF and HTB queues accepted 10,000,000 Kbps and reported
+1,250,000,000 bytes/second for both rate and ceiling. The vendor burst
+calculation also accepted this value. The temporary IFB interface was removed
+after verification. This verifies queue configuration, not 10 Gbps throughput;
+actual speed depends on the Wi-Fi link, Ethernet uplink and shaping load.
 
 The backend uses the installed tc_wrapper.sh path, IFB/TBF/HTB queues and
 vendor WMM set_qos setters. Desired settings live in traffic-policies.json

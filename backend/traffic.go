@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const minTrafficKbps, maxTrafficKbps, maxTrafficOverrides = 32, 1000000, 128
+const minTrafficKbps, maxTrafficKbps, maxTrafficOverrides = 32, 10000000, 128
 
 // Rates are decimal kilobits per second, from the wireless client's perspective.
 // Null is unlimited. An explicit client override replaces both default directions.

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import type { Band } from '@/types'
 import { cn } from '@/ui/cn'
-import { Badge, type Tone } from '@/ui/kit'
+import { Badge, Spinner, type Tone } from '@/ui/kit'
 import { formatAge, signalQuality } from '@/utils/format'
 import { useApp } from '@/stores/app'
 
@@ -49,13 +49,14 @@ export function Stat({ label, value, detail, tone = 'neutral', icon, className, 
 const bandVar: Record<Band, string> = { '2.4': 'band-24', '5': 'band-5', '6': 'band-6' }
 export const bandColor = (band: Band) => `var(--${bandVar[band]})`
 
-export function BandChip({ band, muted }: { band: Band | ''; muted?: boolean }) {
+export function BandChip({ band, muted, loading }: { band: Band | ''; muted?: boolean; loading?: boolean }) {
   if (!band) return <span className="text-faint">—</span>
   return (
     <span
       className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 text-2xs font-semibold leading-4', muted ? 'border-line text-faint' : 'border-transparent')}
       style={muted ? undefined : { background: `var(--${bandVar[band]}-soft)`, color: `var(--${bandVar[band]})` }}
     >
+      {loading && <Spinner size={10} className="shrink-0" />}
       {band} GHz
     </span>
   )

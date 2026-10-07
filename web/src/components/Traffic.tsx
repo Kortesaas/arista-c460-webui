@@ -12,12 +12,12 @@ const priorityLabels = { voice: 'Voice', video: 'Video', 'best-effort': 'Best ef
 const validMAC = (v: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(v) && (parseInt(v.slice(0, 2), 16) & 1) === 0 && v !== '00:00:00:00:00:00'
 
 export function TrafficLimitsHint() {
-  return <p className="text-[12px] leading-5 text-muted"><strong className="font-medium text-ink">Bandwidth shaping:</strong> 32–1,000,000 Kbps per direction; blank means unlimited. This AP can shape traffic on up to eight SSIDs at once. Each SSID cap is shared across all its bands and devices.</p>
+  return <p className="text-[12px] leading-5 text-muted"><strong className="font-medium text-ink">Bandwidth shaping:</strong> 32 Kbps–10 Gbps per direction (10,000,000 Kbps); blank means unlimited. This AP can shape traffic on up to eight SSIDs at once. Each SSID cap is shared across all its bands and devices.</p>
 }
 
 function RateFields({ value, onChange, disabled, prefix }: { value: TrafficLimits; onChange: (value: TrafficLimits) => void; disabled: boolean; prefix: string }) {
   return <div className="grid gap-3 sm:grid-cols-2">{(['downloadKbps', 'uploadKbps'] as const).map((key) => <Field key={key} label={key === 'downloadKbps' ? 'Download · Kbps' : 'Upload · Kbps'}>
-    <Input aria-label={`${prefix} ${key === 'downloadKbps' ? 'download' : 'upload'} Kbps`} type="number" min={32} max={1000000} step={1} placeholder="Unlimited" value={value[key] ?? ''} disabled={disabled} onChange={(e) => onChange({ ...value, [key]: e.target.value === '' ? null : Number(e.target.value) })} />
+    <Input aria-label={`${prefix} ${key === 'downloadKbps' ? 'download' : 'upload'} Kbps`} type="number" min={32} max={10000000} step={1} placeholder="Unlimited" value={value[key] ?? ''} disabled={disabled} onChange={(e) => onChange({ ...value, [key]: e.target.value === '' ? null : Number(e.target.value) })} />
   </Field>)}</div>
 }
 
@@ -46,7 +46,7 @@ export function TrafficDialog({ name, clientMAC, onClose }: { name: string; clie
   const disabled = busy || readOnly || !data?.supported
   const changed = form && data && JSON.stringify(form) !== JSON.stringify(data.settings)
   const limits = form ? [form.bandwidth, form.perClient, ...Object.values(form.clients)] : []
-  const invalidRate = limits.some((l) => Object.values(l).some((n) => n !== null && (!Number.isInteger(n) || n < 32 || n > 1000000)))
+  const invalidRate = limits.some((l) => Object.values(l).some((n) => n !== null && (!Number.isInteger(n) || n < 32 || n > 10000000)))
   const cleanMAC = mac.trim().toLowerCase().replaceAll('-', ':')
   const addOverride = () => { if (!form || !validMAC(cleanMAC)) return; setForm({ ...form, clients: { ...form.clients, [cleanMAC]: draft } }); setMAC(''); setDraft(emptyLimits()) }
   const removeOverride = (address: string) => { if (!form) return; const next = { ...form.clients }; delete next[address]; setForm({ ...form, clients: next }) }
@@ -103,7 +103,7 @@ export function TrafficDialog({ name, clientMAC, onClose }: { name: string; clie
         {data.queues.length === 0 ? <p className="text-[12px] text-muted">No active bandwidth queues.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-[12px]"><thead className="text-faint"><tr>{['Scope / direction', 'Limit', 'Transferred', 'Packets', 'Drops', 'Overlimits'].map((v) => <th key={v} className="px-2 py-2 font-medium">{v}</th>)}</tr></thead><tbody className="divide-y divide-line">{data.queues.map((q) => <tr key={`${q.interface}:${q.mac ?? 'ssid'}`}><td className="px-2 py-2"><span className="font-mono">{q.mac || 'Whole network'}</span><span className="block text-muted">{q.direction}</span></td><td className="px-2 py-2">{q.limitKbps?.toLocaleString()} Kbps</td><td className="px-2 py-2">{formatBytes(q.bytes)}</td><td className="px-2 py-2">{q.packets.toLocaleString()}</td><td className="px-2 py-2">{q.drops.toLocaleString()}</td><td className="px-2 py-2">{q.overlimits.toLocaleString()}</td></tr>)}</tbody></table></div>}
         {form.qos && <p className="text-[12px] text-muted">QoS: {data.qosStatus === 'configured-no-driver-readback' ? 'Configuration accepted; operating priority cannot be read from this driver.' : data.qosStatus}</p>}
       </>}
-      {invalidRate && <p role="alert" className="text-[12px] text-warn">Use whole numbers between 32 and 1,000,000 Kbps, or leave a limit blank.</p>}
+      {invalidRate && <p role="alert" className="text-[12px] text-warn">Use whole numbers between 32 and 10,000,000 Kbps, or leave a limit blank.</p>}
     </div>}
     <DialogActions><Button disabled={busy} onClick={onClose}>Close</Button><Button variant="primary" disabled={disabled || !changed || invalidRate} onClick={() => void save()}>{busy ? <Spinner size={12} /> : <Save size={13} />} Save limits & QoS</Button></DialogActions>
   </Dialog>

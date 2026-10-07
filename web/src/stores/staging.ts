@@ -58,7 +58,10 @@ export const useStaging = create<StagingStore>((set, get) => ({
     if (busy) return false
     if (!changes.length) return true
     set({ busy: true })
-    const ok = await useApp.getState().change(`${changes.length} ${changes.length === 1 ? 'change' : 'changes'} applied together`, () => api.applyBatch(changes))
+    const ssids = changes.flatMap((change) => change.kind === 'ssid-create' || change.kind === 'ssid-update'
+      ? [{ previousName: change.kind === 'ssid-update' ? change.name : undefined, input: change.ssid }]
+      : [])
+    const ok = await useApp.getState().change(`${changes.length} ${changes.length === 1 ? 'change' : 'changes'} applied together`, () => api.applyBatch(changes), ssids)
     set({ busy: false, ...(ok ? { changes: [] } : {}) })
     return ok
   },

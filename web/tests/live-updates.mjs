@@ -32,6 +32,9 @@ globalThis.__testAPI = {
   logout: async () => undefined,
 }
 let source = await fs.readFile(new URL('../src/stores/app.ts', import.meta.url), 'utf8')
+const statusSource = await fs.readFile(new URL('../src/utils/ssid-status.ts', import.meta.url), 'utf8')
+const statusModule = ts.transpileModule(statusSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
+source = source.replace("from '@/utils/ssid-status'", `from 'data:text/javascript;base64,${Buffer.from(statusModule).toString('base64')}'`)
 source = source.replace("from 'zustand'", `from '${pathToFileURL(fileURLToPath(new URL('../node_modules/zustand/esm/index.mjs', import.meta.url))).href}'`)
 source = source.replace("import { api, ApiError } from '@/api'", 'const api = globalThis.__testAPI; class ApiError extends Error { status: number }')
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
