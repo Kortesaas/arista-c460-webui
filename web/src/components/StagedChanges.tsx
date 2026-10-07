@@ -71,7 +71,10 @@ function ReviewDialog({ onClose }: { onClose: () => void }) {
         <Button
           variant="primary"
           disabled={busy || !changes.length}
-          onClick={() => void applyAll().then((ok) => ok && onClose())}
+          onClick={() => {
+            onClose()
+            void applyAll()
+          }}
         >
           {busy && <Spinner size={12} />} Apply {changes.length} {changes.length === 1 ? 'change' : 'changes'}
         </Button>

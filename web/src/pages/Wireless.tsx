@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Gauge, ShieldCheck } from 'lucide-react'
 import { TrafficDialog, TrafficLimitsHint } from '@/components/Traffic'
 import { ClientAccessDialog } from '@/components/ClientAccess'
@@ -49,7 +49,21 @@ function MixedBadge({ ssid }: { ssid: Ssid }) {
 export function WirelessPage() {
   const state = useApp((store) => store.state)
   const staged = useStaging((s) => s.changes)
-  const [editing, setEditing] = useState<Ssid | 'new' | null>(null)
+  const change = useApp((store) => store.change)
+  const [editing, setEditing] = useState<{ ssid: Ssid | null; draft?: SsidInput } | null>(null)
+  const [applying, setApplying] = useState('')
+  const saving = useRef(false)
+  const save = async (input: SsidInput) => {
+    if (!editing || saving.current) return
+    const { ssid } = editing
+    saving.current = true
+    setApplying(`${ssid ? 'Saving' : 'Creating'} ${input.name}…`)
+    setEditing(null)
+    const ok = await change(ssid ? `Saved ${input.name}` : `Created ${input.name}`, () => (ssid ? api.updateSsid(ssid.name, input) : api.createSsid(input)))
+    saving.current = false
+    setApplying('')
+    if (!ok) setEditing({ ssid, draft: input })
+  }
   // Links such as /wireless?edit=Office (from the Overview) open the editor.
   const [params, setParams] = useSearchParams()
   const editParam = params.get('edit')
@@ -57,7 +71,7 @@ export function WirelessPage() {
   useEffect(() => {
     if (!editParam || !ssidList) return
     const target = editParam === 'new' ? 'new' : ssidList.find((s) => s.name === editParam)
-    if (target) setEditing(target)
+    if (target) setEditing({ ssid: target === 'new' ? null : target })
     setParams({}, { replace: true })
   }, [editParam, ssidList, setParams])
   const [advanced, setAdvanced] = useState<Ssid | null>(null)
@@ -82,7 +96,7 @@ export function WirelessPage() {
       <IconButton label={`Advanced settings for ${ssid.name}`} onClick={() => setAdvanced(ssid)}>
         <SlidersHorizontal size={14} />
       </IconButton>
-      <IconButton label={`Edit ${ssid.name}`} write onClick={() => setEditing(ssid)}>
+      <IconButton label={`Edit ${ssid.name}`} write disabled={Boolean(applying)} onClick={() => setEditing({ ssid })}>
         <Pencil size={14} />
       </IconButton>
       <IconButton label={`Delete ${ssid.name}`} write onClick={() => setDeleting(ssid)} className="hover:text-danger">
@@ -97,18 +111,24 @@ export function WirelessPage() {
       width="settings"
       description="Networks broadcast by this access point. Each one can use its own VLAN; addresses come from your router's DHCP, not the AP."
       actions={
-        <Button variant="primary" onClick={() => setEditing('new')}>
+        <Button variant="primary" disabled={Boolean(applying)} onClick={() => setEditing({ ssid: null })}>
           <Plus size={14} /> Add network
         </Button>
       }
     >
+      {applying && (
+        <div role="status" className="mb-3 flex items-center gap-2 rounded-lg border border-accent bg-accent-soft p-3 text-[13px] text-ink">
+          <Spinner size={14} />
+          <p>{applying} Wi-Fi may restart while the AP applies these settings.</p>
+        </div>
+      )}
       {state.ssids.length === 0 ? (
         <Panel>
           <EmptyState
             icon={<Wifi size={28} />}
             title="No wireless networks"
             description="Add a network to start broadcasting."
-            action={<Button onClick={() => setEditing('new')}>Add network</Button>}
+            action={<Button disabled={Boolean(applying)} onClick={() => setEditing({ ssid: null })}>Add network</Button>}
           />
         </Panel>
       ) : (
@@ -273,17 +293,16 @@ export function WirelessPage() {
       {access && <ClientAccessDialog name={access} onClose={() => setAccess(null)} />}
       {joining && <JoinCodeDialog name={joining} onClose={() => setJoining(null)} />}
       {scheduling && <ScheduleDialog name={scheduling} onClose={() => setScheduling(null)} />}
-      {editing && <SsidDialog ssid={editing === 'new' ? null : editing} existing={state.ssids.map((ssid) => ssid.name)} onClose={() => setEditing(null)} />}
+      {editing && <SsidDialog ssid={editing.ssid} draft={editing.draft} existing={state.ssids.map((ssid) => ssid.name)} onSave={(input) => void save(input)} onClose={() => setEditing(null)} />}
       {deleting && <DeleteDialog ssid={deleting} onClose={() => setDeleting(null)} />}
     </Page>
   )
 }
 
-function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: string[]; onClose: () => void }) {
-  const change = useApp((store) => store.change)
+function SsidDialog({ ssid, draft, existing, onSave, onClose }: { ssid: Ssid | null; draft?: SsidInput; existing: string[]; onSave: (input: SsidInput) => void; onClose: () => void }) {
   const stage = useStaging((s) => s.stage)
   const staged = useStaging((s) => s.changes)
-  const [form, setForm] = useState<SsidInput>(() => ({
+  const [form, setForm] = useState<SsidInput>(() => draft ?? ({
     name: ssid?.name ?? '',
     enabled: ssid?.enabled ?? true,
     hidden: ssid?.hidden ?? false,
@@ -293,10 +312,9 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
     vlan: ssid ? ssid.vlan : null,
     isolation: ssid?.isolation ?? false,
   }))
-  const [vlanMode, setVlanMode] = useState<'tagged' | 'untagged'>(ssid?.vlan == null ? 'untagged' : 'tagged')
-  const [vlanText, setVlanText] = useState(ssid?.vlan ? String(ssid.vlan) : '')
+  const [vlanMode, setVlanMode] = useState<'tagged' | 'untagged'>(form.vlan === null ? 'untagged' : 'tagged')
+  const [vlanText, setVlanText] = useState(form.vlan === null ? '' : String(form.vlan))
   const [showPassword, setShowPassword] = useState(false)
-  const [busy, setBusy] = useState(false)
   const set = <K extends keyof SsidInput>(key: K, value: SsidInput[K]) => setForm((current) => ({ ...current, [key]: value }))
 
   const vlan = vlanMode === 'untagged' ? null : Number(vlanText)
@@ -316,12 +334,6 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
   if (staged.some((c) => c.kind === 'ssid-create' && c.ssid.name === name) && name !== ssid?.name) problems.push('A pending new network already uses this name.')
 
   const input = (): SsidInput => ({ ...form, name, vlan })
-  const save = async () => {
-    setBusy(true)
-    const ok = await change(ssid ? `Saved ${name}` : `Created ${name}`, () => (ssid ? api.updateSsid(ssid.name, input()) : api.createSsid(input())))
-    setBusy(false)
-    if (ok) onClose()
-  }
   const later = () => {
     stage(ssid ? { kind: 'ssid-update', name: ssid.name, ssid: input() } : { kind: 'ssid-create', ssid: input() })
     onClose()
@@ -443,11 +455,10 @@ function SsidDialog({ ssid, existing, onClose }: { ssid: Ssid | null; existing: 
 
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button write disabled={busy || problems.length > 0} onClick={later} title="Collect this with other changes and apply them together">
+        <Button write disabled={problems.length > 0} onClick={later} title="Collect this with other changes and apply them together">
           Add to pending
         </Button>
-        <Button variant="primary" disabled={busy || problems.length > 0} onClick={() => void save()}>
-          {busy && <Spinner size={12} />}
+        <Button variant="primary" disabled={problems.length > 0} onClick={() => onSave(input())}>
           {ssid ? 'Save now' : 'Create now'}
         </Button>
       </DialogActions>

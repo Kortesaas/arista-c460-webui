@@ -54,7 +54,8 @@ export const useStaging = create<StagingStore>((set, get) => ({
   discard: () => set({ changes: [] }),
 
   applyAll: async () => {
-    const { changes } = get()
+    const { changes, busy } = get()
+    if (busy) return false
     if (!changes.length) return true
     set({ busy: true })
     const ok = await useApp.getState().change(`${changes.length} ${changes.length === 1 ? 'change' : 'changes'} applied together`, () => api.applyBatch(changes))
